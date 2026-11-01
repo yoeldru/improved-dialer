@@ -37,6 +37,8 @@ class DialerInCallService : InCallService() {
         super.onCallRemoved(call)
         CallManager.onRemoved(call)
         updateNotification()
+        // כל השיחות הסתיימו — עוצרים הקלטה אם יש
+        if (CallManager.calls.isEmpty()) RecordingService.stop(this)
     }
 
     @Deprecated("Deprecated in Java")
@@ -52,6 +54,21 @@ class DialerInCallService : InCallService() {
     fun toggleMute() {
         val muted = CallManager.audioState?.isMuted ?: false
         setMuted(!muted)
+    }
+
+    // עודכן: 2026-11-01 22:45 — בחירת יעד שמע: טלפון / רמקול / בלוטות' / אוזניות
+    @Suppress("DEPRECATION")
+    fun routeTo(route: Int) {
+        setAudioRoute(route)
+    }
+
+    @Suppress("DEPRECATION")
+    fun routeToBluetooth(device: android.bluetooth.BluetoothDevice?) {
+        if (device != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            requestBluetoothAudio(device)
+        } else {
+            setAudioRoute(CallAudioState.ROUTE_BLUETOOTH)
+        }
     }
 
     @Suppress("DEPRECATION")

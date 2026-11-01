@@ -52,6 +52,9 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
+        findViewById<MaterialButton>(R.id.btnRecordings).setOnClickListener {
+            startActivity(Intent(this, RecordingsActivity::class.java))
+        }
         findViewById<MaterialButton>(R.id.btnBlocked).setOnClickListener {
             try {
                 val blockedIntent = getSystemService(TelecomManager::class.java)?.createManageBlockedNumbersIntent()

@@ -53,8 +53,17 @@ object CallManager {
 
     fun isRinging(call: Call) = stateOf(call) == Call.STATE_RINGING
 
+    // עודכן: 2026-11-01 22:45 — שיחות ועידה: משתתפים בוועידה לא מוצגים כשיחה נפרדת
+    fun topLevel(): List<Call> = calls.filter { it.parent == null }
+
+    fun isConference(call: Call): Boolean =
+        call.details?.hasProperty(Call.Details.PROPERTY_CONFERENCE) == true || call.children.isNotEmpty()
+
+    fun activeCall(): Call? = topLevel().firstOrNull { stateOf(it) == Call.STATE_ACTIVE }
+
     /** השיחה שהמסך מציג: נכנסת > פעילה/מחייגת > בהמתנה */
     fun primary(): Call? {
+        val calls = topLevel()
         calls.firstOrNull { stateOf(it) == Call.STATE_RINGING }?.let { return it }
         calls.firstOrNull {
             val s = stateOf(it)
@@ -64,5 +73,35 @@ object CallManager {
         return calls.lastOrNull()
     }
 
-    fun heldCall(): Call? = calls.firstOrNull { stateOf(it) == Call.STATE_HOLDING }
+    fun heldCall(): Call? = topLevel().firstOrNull { stateOf(it) == Call.STATE_HOLDING }
+
+    /** מיזוג השיחה הפעילה עם השיחה שבהמתנה לשיחת ועידה */
+    fun merge(): Boolean {
+        val active = activeCall() ?: return false
+        val held = heldCall()
+        if (held != null && active.conferenceableCalls.contains(held)) {
+            active.conference(held)
+            return true
+        }
+        if (active.details?.can(Call.Details.CAPABILITY_MERGE_CONFERENCE) == true) {
+            active.mergeConference()
+            return true
+        }
+        if (held != null) {
+            active.conference(held) // ננסה בכל זאת — תלוי בחברת הסלולר
+            return true
+        }
+        return false
+    }
+
+    fun swap() {
+        val active = activeCall()
+        if (active != null && active.details?.can(Call.Details.CAPABILITY_SWAP_CONFERENCE) == true) {
+            active.swapConference()
+            return
+        }
+        val held = heldCall() ?: return
+        active?.hold()
+        held.unhold()
+    }
 }

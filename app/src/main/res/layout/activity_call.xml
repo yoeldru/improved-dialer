@@ -189,6 +189,7 @@
             android:orientation="vertical"
             android:visibility="gone" />
 
+        <!-- עודכן: 2026-11-01 22:40 — שמע (רמקול/טלפון/בלוטות'), הוספת שיחה, מיזוג, הקלטה -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -198,56 +199,140 @@
                 android:id="@+id/btnMute"
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="0dp"
-                android:layout_height="64dp"
+                android:layout_height="68dp"
                 android:layout_margin="4dp"
                 android:layout_weight="1"
-                android:text="🔇\nהשתק"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
+                android:text="🎤\nהשתק"
                 android:textColor="@android:color/white"
-                android:textSize="12sp" />
+                android:textSize="12sp"
+                app:cornerRadius="18dp"
+                app:strokeColor="#55FFFFFF" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnSpeaker"
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="0dp"
-                android:layout_height="64dp"
+                android:layout_height="68dp"
                 android:layout_margin="4dp"
                 android:layout_weight="1"
-                android:text="🔊\nרמקול"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
+                android:text="🔈\nרמקול"
                 android:textColor="@android:color/white"
-                android:textSize="12sp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnHold"
-                style="@style/Widget.Material3.Button.OutlinedButton"
-                android:layout_width="0dp"
-                android:layout_height="64dp"
-                android:layout_margin="4dp"
-                android:layout_weight="1"
-                android:text="⏸\nהמתנה"
-                android:textColor="@android:color/white"
-                android:textSize="12sp" />
+                android:textSize="12sp"
+                app:cornerRadius="18dp"
+                app:strokeColor="#55FFFFFF" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnKeypad"
                 style="@style/Widget.Material3.Button.OutlinedButton"
                 android:layout_width="0dp"
-                android:layout_height="64dp"
+                android:layout_height="68dp"
                 android:layout_margin="4dp"
                 android:layout_weight="1"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
                 android:text="⌨\nמקלדת"
                 android:textColor="@android:color/white"
-                android:textSize="12sp" />
+                android:textSize="12sp"
+                app:cornerRadius="18dp"
+                app:strokeColor="#55FFFFFF" />
         </LinearLayout>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSwap"
-            style="@style/Widget.Material3.Button.OutlinedButton"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:layout_margin="4dp"
-            android:text="⇄ החלף בין השיחות"
-            android:textColor="@android:color/white"
-            android:visibility="gone" />
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnHold"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="68dp"
+                android:layout_margin="4dp"
+                android:layout_weight="1"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
+                android:text="⏸\nהמתנה"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"
+                app:cornerRadius="18dp"
+                app:strokeColor="#55FFFFFF" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAddCall"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="68dp"
+                android:layout_margin="4dp"
+                android:layout_weight="1"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
+                android:text="➕\nהוסף שיחה"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"
+                app:cornerRadius="18dp"
+                app:strokeColor="#55FFFFFF" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnRecord"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="68dp"
+                android:layout_margin="4dp"
+                android:layout_weight="1"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:paddingStart="2dp"
+                android:paddingEnd="2dp"
+                android:text="⏺\nהקלט"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"
+                app:cornerRadius="18dp"
+                app:strokeColor="#55FFFFFF" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSwap"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_margin="4dp"
+                android:layout_weight="1"
+                android:text="⇄ החלף"
+                android:textColor="@android:color/white"
+                android:visibility="gone"
+                app:cornerRadius="18dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnMerge"
+                android:layout_width="0dp"
+                android:layout_height="52dp"
+                android:layout_margin="4dp"
+                android:layout_weight="1"
+                android:text="⧉ מזג שיחות"
+                android:textColor="@android:color/white"
+                android:visibility="gone"
+                app:backgroundTint="#FF1B8A5A"
+                app:cornerRadius="18dp" />
+        </LinearLayout>
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/btnHangup"

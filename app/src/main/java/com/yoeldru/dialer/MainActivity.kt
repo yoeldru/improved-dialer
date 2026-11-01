@@ -63,12 +63,19 @@ class MainActivity : AppCompatActivity() {
 
         pager = findViewById(R.id.pager)
         pager.adapter = object : FragmentStateAdapter(this) {
-            override fun getItemCount(): Int = 2
-            override fun createFragment(position: Int): Fragment =
-                if (position == 0) DialerFragment() else FavoritesFragment()
+            override fun getItemCount(): Int = 3
+            override fun createFragment(position: Int): Fragment = when (position) {
+                0 -> DialerFragment()
+                1 -> FavoritesFragment()
+                else -> ContactsFragment()
+            }
         }
         TabLayoutMediator(findViewById<TabLayout>(R.id.tabs), pager) { tab, pos ->
-            tab.text = if (pos == 0) "☎ חייגן" else "⭐ מועדפים"
+            tab.text = when (pos) {
+                0 -> "☎ חייגן"
+                1 -> "⭐ מועדפים"
+                else -> "👤 אנשי קשר"
+            }
         }.attach()
 
         findViewById<ImageButton>(R.id.btnSettings).setOnClickListener {
@@ -102,6 +109,18 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         DrivingModeService.onStateChanged = null
         super.onPause()
+    }
+
+    /** מעבר למסך החייגן (למשל "ערוך לפני חיוג" מאנשי קשר) */
+    fun showDialer() {
+        pager.currentItem = 0
+        val f = supportFragmentManager.findFragmentByTag("f0") as? DialerFragment
+        MainActivity.pendingDial?.let { n ->
+            if (f != null && f.isResumed) {
+                f.setTyped(n)
+                MainActivity.pendingDial = null
+            }
+        }
     }
 
     /** כיבוי/הדלקה של גלילה בין המסכים (בזמן סידור מועדפים) */
@@ -204,6 +223,7 @@ class MainActivity : AppCompatActivity() {
             Manifest.permission.READ_PHONE_STATE
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) needed.add(Manifest.permission.POST_NOTIFICATIONS)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) needed.add(Manifest.permission.BLUETOOTH_CONNECT)
         val missing = needed.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }

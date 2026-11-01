@@ -41,6 +41,8 @@ class CallActivity : AppCompatActivity() {
     private lateinit var btnSpeaker: MaterialButton
     private lateinit var btnHold: MaterialButton
     private lateinit var btnSwap: MaterialButton
+    private lateinit var btnMerge: MaterialButton
+    private lateinit var btnRecord: MaterialButton
 
     private val handler = Handler(Looper.getMainLooper())
     private var shownNumber: String? = null
@@ -79,6 +81,8 @@ class CallActivity : AppCompatActivity() {
         btnSpeaker = findViewById(R.id.btnSpeaker)
         btnHold = findViewById(R.id.btnHold)
         btnSwap = findViewById(R.id.btnSwap)
+        btnMerge = findViewById(R.id.btnMerge)
+        btnRecord = findViewById(R.id.btnRecord)
 
         findViewById<FloatingActionButton>(R.id.btnAnswer).setOnClickListener { answer() }
         findViewById<FloatingActionButton>(R.id.btnReject).setOnClickListener {
@@ -90,17 +94,25 @@ class CallActivity : AppCompatActivity() {
             CallManager.primary()?.disconnect()
         }
         btnMute.setOnClickListener { CallManager.service?.toggleMute() }
-        btnSpeaker.setOnClickListener { CallManager.service?.toggleSpeaker() }
+        btnSpeaker.setOnClickListener { chooseAudioRoute() }
+        btnSpeaker.setOnLongClickListener {
+            CallManager.service?.toggleSpeaker()
+            true
+        }
+        findViewById<MaterialButton>(R.id.btnAddCall).setOnClickListener {
+            // פותח את החייגן; שיחה חדשה תעביר את הנוכחית להמתנה אוטומטית
+            startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        btnMerge.setOnClickListener {
+            if (!CallManager.merge()) PhoneUtils.toast(this, "אין שיחות למיזוג")
+            else PhoneUtils.toast(this, "ממזג שיחות...")
+        }
+        btnRecord.setOnClickListener { toggleRecording() }
         btnHold.setOnClickListener {
             val call = CallManager.primary() ?: return@setOnClickListener
             if (CallManager.stateOf(call) == Call.STATE_HOLDING) call.unhold() else call.hold()
         }
-        btnSwap.setOnClickListener {
-            val held = CallManager.heldCall() ?: return@setOnClickListener
-            val active = CallManager.calls.firstOrNull { CallManager.stateOf(it) == Call.STATE_ACTIVE }
-            active?.hold()
-            held.unhold()
-        }
+        btnSwap.setOnClickListener { CallManager.swap() }
         findViewById<MaterialButton>(R.id.btnKeypad).setOnClickListener {
             dtmfKeypad.visibility = if (dtmfKeypad.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
@@ -169,8 +181,18 @@ class CallActivity : AppCompatActivity() {
             return
         }
         val state = CallManager.stateOf(call)
-        val number = CallManager.numberOf(call)
-        if (number != shownNumber) {
+        val conference = CallManager.isConference(call)
+        val number = if (conference) "conf:" + call.children.size else CallManager.numberOf(call)
+        if (conference && number != shownNumber) {
+            shownNumber = number
+            val names = call.children.map { ch ->
+                val n = CallManager.numberOf(ch)
+                ContactsRepo.lookup(this, n).name ?: n
+            }
+            nameView.text = "שיחת ועידה" + if (names.isNotEmpty()) " (${names.size})" else ""
+            numberView.text = names.joinToString(" · ")
+            Avatar.bind(photo, initial, "ועידה", null)
+        } else if (number != shownNumber) {
             shownNumber = number
             dtmfTyped.setLength(0)
             val info = ContactsRepo.lookup(this, number)
@@ -186,16 +208,31 @@ class CallActivity : AppCompatActivity() {
 
         val audio = CallManager.audioState
         val muted = audio?.isMuted ?: false
-        val speaker = audio?.route == CallAudioState.ROUTE_SPEAKER
-        btnMute.alpha = if (muted) 1f else 0.6f
+        val route = audio?.route ?: CallAudioState.ROUTE_EARPIECE
+        val speaker = route == CallAudioState.ROUTE_SPEAKER
+        btnMute.alpha = if (muted) 1f else 0.7f
         btnMute.text = if (muted) "🔇\nמושתק" else "🎤\nהשתק"
-        btnSpeaker.alpha = if (speaker) 1f else 0.6f
-        btnSpeaker.text = if (speaker) "🔊\nרמקול פעיל" else "🔈\nרמקול"
+        setOn(btnMute, muted)
+        val hasExternal = audio != null && (audio.supportedRouteMask and
+            (CallAudioState.ROUTE_BLUETOOTH or CallAudioState.ROUTE_WIRED_HEADSET)) != 0
+        btnSpeaker.text = when (route) {
+            CallAudioState.ROUTE_SPEAKER -> "🔊\nרמקול"
+            CallAudioState.ROUTE_BLUETOOTH -> "🚗\nבלוטות'"
+            CallAudioState.ROUTE_WIRED_HEADSET -> "🎧\nאוזניות"
+            else -> if (hasExternal) "📱\nטלפון ▾" else "🔈\nרמקול"
+        }
+        setOn(btnSpeaker, speaker || route == CallAudioState.ROUTE_BLUETOOTH)
         btnHold.text = if (state == Call.STATE_HOLDING) "▶\nהמשך" else "⏸\nהמתנה"
-        btnSwap.visibility = if (CallManager.calls.size > 1 && CallManager.heldCall() != null && !ringing) View.VISIBLE else View.GONE
+        setOn(btnHold, state == Call.STATE_HOLDING)
+        val top = CallManager.topLevel()
+        val twoCalls = top.size > 1 && CallManager.heldCall() != null && !ringing
+        btnSwap.visibility = if (twoCalls) View.VISIBLE else View.GONE
+        btnMerge.visibility = if (twoCalls || (!ringing && call.details?.can(Call.Details.CAPABILITY_MERGE_CONFERENCE) == true)) View.VISIBLE else View.GONE
+        btnRecord.text = if (RecordingService.recording) "⏹\nעצור הקלטה" else "⏺\nהקלט"
+        setOn(btnRecord, RecordingService.recording)
 
         if (!ringing && dtmfTyped.isEmpty()) {
-            val others = CallManager.calls.size - 1
+            val others = CallManager.topLevel().size - 1
             if (others > 0) {
                 extraView.visibility = View.VISIBLE
                 extraView.text = "שיחה נוספת בהמתנה"
@@ -230,7 +267,8 @@ class CallActivity : AppCompatActivity() {
             Call.STATE_DISCONNECTING, Call.STATE_DISCONNECTED -> "השיחה הסתיימה"
             Call.STATE_ACTIVE -> {
                 val start = call.details?.connectTimeMillis ?: 0L
-                if (start > 0) formatDuration((System.currentTimeMillis() - start) / 1000) else "מחובר"
+                val t = if (start > 0) formatDuration((System.currentTimeMillis() - start) / 1000) else "מחובר"
+                if (RecordingService.recording) "⏺ $t" else t
             }
             else -> ""
         }
@@ -251,6 +289,94 @@ class CallActivity : AppCompatActivity() {
     private fun releaseProximity() {
         val l = proximityLock ?: return
         if (l.isHeld) l.release()
+    }
+
+    // ---------- נכתב: 2026-11-01 23:00 — שמע, הקלטה ----------
+
+    /** כפתור "פעיל" מודגש */
+    private fun setOn(b: MaterialButton, on: Boolean) {
+        b.backgroundTintList = android.content.res.ColorStateList.valueOf(if (on) 0x551FA463 else 0x00000000)
+        b.alpha = if (on) 1f else 0.85f
+    }
+
+    /** בחירת יעד שמע: טלפון / רמקול / דיבורית בלוטות' / אוזניות */
+    @Suppress("DEPRECATION")
+    private fun chooseAudioRoute() {
+        val svc = CallManager.service ?: return
+        val audio = CallManager.audioState
+        if (audio == null) {
+            svc.toggleSpeaker()
+            return
+        }
+        val mask = audio.supportedRouteMask
+        val hasExternal = (mask and (CallAudioState.ROUTE_BLUETOOTH or CallAudioState.ROUTE_WIRED_HEADSET)) != 0
+        if (!hasExternal) {
+            svc.toggleSpeaker() // אין דיבורית — לחיצה מחליפה בין טלפון לרמקול
+            return
+        }
+        val labels = ArrayList<String>()
+        val actions = ArrayList<() -> Unit>()
+        if ((mask and CallAudioState.ROUTE_EARPIECE) != 0) {
+            labels.add("📱 טלפון (אפרכסת)")
+            actions.add { svc.routeTo(CallAudioState.ROUTE_EARPIECE) }
+        }
+        labels.add("🔊 רמקול")
+        actions.add { svc.routeTo(CallAudioState.ROUTE_SPEAKER) }
+        if ((mask and CallAudioState.ROUTE_WIRED_HEADSET) != 0) {
+            labels.add("🎧 אוזניות")
+            actions.add { svc.routeTo(CallAudioState.ROUTE_WIRED_HEADSET) }
+        }
+        if ((mask and CallAudioState.ROUTE_BLUETOOTH) != 0) {
+            val devices = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P)
+                audio.supportedBluetoothDevices.toList() else emptyList()
+            if (devices.isEmpty()) {
+                labels.add("🚗 דיבורית בלוטות'")
+                actions.add { svc.routeToBluetooth(null) }
+            } else {
+                for (d in devices) {
+                    val name = try {
+                        d.name
+                    } catch (e: SecurityException) {
+                        null
+                    } ?: "בלוטות'"
+                    labels.add("🚗 $name")
+                    actions.add { svc.routeToBluetooth(d) }
+                }
+            }
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle("לאן להעביר את השמע?")
+            .setItems(labels.toTypedArray()) { _, which -> actions[which]() }
+            .show()
+    }
+
+    private val micPermLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) toggleRecording() else PhoneUtils.toast(this, "הקלטה צריכה הרשאת מיקרופון") }
+
+    private fun toggleRecording() {
+        if (RecordingService.recording) {
+            RecordingService.stop(this)
+            return
+        }
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            micPermLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        RecordingService.onSilenceDetected = {
+            runOnUiThread {
+                MaterialAlertDialogBuilder(this)
+                    .setTitle("ההקלטה שקטה")
+                    .setMessage("נראה שהטלפון חוסם הקלטה בזמן שיחה (מגבלה של אנדרואיד/היצרן). אפשר לנסות להפעיל רמקול — לפעמים זה עוזר.")
+                    .setPositiveButton("הבנתי", null)
+                    .show()
+            }
+        }
+        RecordingService.start(this, nameView.text.toString())
+        val speakerOn = CallManager.audioState?.route == CallAudioState.ROUTE_SPEAKER
+        if (!speakerOn) PhoneUtils.toastLong(this, "מקליט ⏺ — כדי שהצד השני יוקלט בבירור, מומלץ להפעיל רמקול")
     }
 
     // ---------- דחייה עם הודעה ----------
