@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- נכתב: 2026-11-01 13:00 (שעון ישראל) — חייגן משופר -->
+<resources>
+    <string name="sc_drive">מצב נהיגה</string>
+    <string name="sc_drive_long">מצב נהיגה — חיוג קולי בלי ידיים</string>
+    <string name="sc_voice">חיוג קולי</string>
+</resources>

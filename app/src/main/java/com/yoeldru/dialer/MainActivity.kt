@@ -41,6 +41,12 @@ class MainActivity : AppCompatActivity() {
 
     private val roleLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
 
+    // נכתב: 2026-11-01 13:05 — הרשאת מיקרופון למצב נהיגה
+    private val micLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startDrivingMode()
+        else PhoneUtils.toast(this, "מצב נהיגה צריך הרשאת מיקרופון")
+    }
+
     private val voiceLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
         if (res.resultCode == RESULT_OK) {
             val list = res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
@@ -66,6 +72,7 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
         findViewById<ImageButton>(R.id.btnShare).setOnClickListener { Updater.share(this) }
+        findViewById<ImageButton>(R.id.btnDrive).setOnClickListener { toggleDrivingMode() }
         findViewById<View>(R.id.updateChip).setOnClickListener {
             Updater.pending(this)?.let { Updater.prompt(this, it) }
         }
@@ -85,6 +92,52 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         refreshUpdateBadge()
         checkForUpdate()
+        DrivingModeService.onStateChanged = { runOnUiThread { refreshDriveButton() } }
+        refreshDriveButton()
+    }
+
+    override fun onPause() {
+        DrivingModeService.onStateChanged = null
+        super.onPause()
+    }
+
+    /** כיבוי/הדלקה של גלילה בין המסכים (בזמן סידור מועדפים) */
+    fun setPagerSwipe(enabled: Boolean) {
+        pager.isUserInputEnabled = enabled
+    }
+
+    // ---------- מצב נהיגה ----------
+
+    fun toggleDrivingMode() {
+        if (DrivingModeService.running) {
+            DrivingModeService.stop(this)
+            PhoneUtils.toast(this, "מצב נהיגה כובה")
+        } else {
+            startDrivingMode()
+        }
+    }
+
+    fun startDrivingMode() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        if (!DrivingModeService.running) {
+            DrivingModeService.start(this)
+            PhoneUtils.toast(this, "🚗 מצב נהיגה פעיל — אמור \"חייגן\" ואת השם")
+        }
+        refreshDriveButton()
+    }
+
+    private fun refreshDriveButton() {
+        val b = findViewById<ImageButton>(R.id.btnDrive)
+        if (DrivingModeService.running) {
+            b.setColorFilter(ContextCompat.getColor(this, R.color.call_green))
+            b.contentDescription = "מצב נהיגה פעיל — לחץ לכיבוי"
+        } else {
+            b.clearColorFilter()
+            b.contentDescription = "מצב נהיגה"
+        }
     }
 
     // ---------- עדכונים ----------
@@ -114,6 +167,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
+        when (intent?.action) {
+            "com.yoeldru.dialer.SHORTCUT_DRIVE" -> {
+                intent?.action = Intent.ACTION_MAIN
+                pager.post { startDrivingMode() }
+                return
+            }
+            "com.yoeldru.dialer.SHORTCUT_VOICE" -> {
+                intent?.action = Intent.ACTION_MAIN
+                pager.post { startVoiceDial() }
+                return
+            }
+        }
         val data = intent?.data ?: return
         if (data.scheme == "tel") {
             pendingDial = PhoneUtils.cleanNumber(data.schemeSpecificPart ?: "")

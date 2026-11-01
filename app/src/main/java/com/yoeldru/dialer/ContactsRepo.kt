@@ -15,7 +15,8 @@ class PhoneEntry(
     val number: String,
     val label: String,
     val photo: String?,
-    val starred: Boolean
+    val starred: Boolean,
+    val type: Int = 0
 ) {
     val t9Words: List<String> by lazy { T9.wordsToT9(name) }
     val local: String by lazy { PhoneUtils.localDigits(number) }
@@ -64,7 +65,7 @@ object ContactsRepo {
                     val customLabel = c.getString(4)
                     val label = ContactsContract.CommonDataKinds.Phone
                         .getTypeLabel(ctx.resources, type, customLabel).toString()
-                    list.add(PhoneEntry(id, name, num, label, c.getString(5), c.getInt(6) == 1))
+                    list.add(PhoneEntry(id, name, num, label, c.getString(5), c.getInt(6) == 1, type))
                 }
             }
         } catch (e: Exception) {

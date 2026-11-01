@@ -3,8 +3,11 @@ package com.yoeldru.dialer
 
 import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.Color
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.net.Uri
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
@@ -58,12 +61,13 @@ object Keypad {
         showLetters: Boolean,
         textColor: Int?,
         onKey: (Char) -> Unit,
-        onLongKey: (Char) -> Boolean
+        onLongKey: (Char) -> Boolean,
+        dark: Boolean = false
     ) {
         container.removeAllViews()
         val ctx = container.context
-        val bg = TypedValue()
-        ctx.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, bg, true)
+        val density = ctx.resources.displayMetrics.density
+        val margin = (5 * density).toInt()
         for (r in 0 until 4) {
             val row = LinearLayout(ctx)
             row.orientation = LinearLayout.HORIZONTAL
@@ -74,14 +78,15 @@ object Keypad {
                 val cell = LinearLayout(ctx)
                 cell.orientation = LinearLayout.VERTICAL
                 cell.gravity = Gravity.CENTER
-                cell.setBackgroundResource(bg.resourceId)
+                cell.background = keyBackground(density, dark)
                 cell.isClickable = true
                 cell.isFocusable = true
 
                 val digit = TextView(ctx)
                 digit.text = k.toString()
-                digit.textSize = 28f
+                digit.textSize = 27f
                 digit.gravity = Gravity.CENTER
+                digit.includeFontPadding = false
                 if (textColor != null) digit.setTextColor(textColor)
                 cell.addView(digit)
 
@@ -100,9 +105,30 @@ object Keypad {
                     onKey(k)
                 }
                 cell.setOnLongClickListener { onLongKey(k) }
-                row.addView(cell, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+                val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+                lp.setMargins(margin, margin, margin, margin)
+                row.addView(cell, lp)
             }
         }
+    }
+
+    // נכתב: 2026-11-01 13:10 — מסגרת מעוצבת לכל מקש: פינות מעוגלות, קו ירוק עדין ומילוי שקוף + אפקט לחיצה
+    private fun keyBackground(density: Float, dark: Boolean): Drawable {
+        val stroke = if (dark) 0x55FFFFFF else 0x991B8A5A.toInt()
+        val fill = if (dark) 0x14FFFFFF else 0x121B8A5A
+        val ripple = if (dark) 0x33FFFFFF else 0x331B8A5A
+        val body = GradientDrawable().apply {
+            setShape(GradientDrawable.RECTANGLE)
+            cornerRadius = 18 * density
+            setColor(fill)
+            setStroke((1.5f * density).toInt().coerceAtLeast(2), stroke)
+        }
+        val maskShape = GradientDrawable().apply {
+            setShape(GradientDrawable.RECTANGLE)
+            cornerRadius = 18 * density
+            setColor(Color.WHITE)
+        }
+        return RippleDrawable(ColorStateList.valueOf(ripple), body, maskShape)
     }
 }
 

@@ -122,6 +122,47 @@ object VoiceMatcher {
         return out
     }
 
+    // נכתב: 2026-11-01 12:50 — עזרים למצב נהיגה
+    private val commandStarts = setOf(
+        "חייג", "חייגי", "תחייג", "תחייגי", "התקשר", "התקשרי", "תתקשר", "תתקשרי", "צלצל", "תצלצל"
+    )
+    private val wakeWord = normalize("חייגן")
+
+    /** האם המשפט מתחיל בפקודת חיוג ("חייג ל...") */
+    fun startsWithCommand(s: String): Boolean {
+        val t = tokens(s)
+        return t.isNotEmpty() && t[0] in commandStarts && t.size >= 2
+    }
+
+    private fun isWake(tok: String): Boolean = tok == wakeWord || (tok.length >= 4 && lev(tok, wakeWord) <= 1)
+
+    /** אם נאמרה מילת ההתעוררות "חייגן" — מחזיר את מה שנאמר אחריה (יכול להיות ריק). אחרת null */
+    fun afterWakeWord(spoken: List<String>): List<String>? {
+        val out = ArrayList<String>()
+        for (alt in spoken) {
+            val t = tokens(alt)
+            val i = t.indexOfFirst { isWake(it) }
+            if (i >= 0) out.add(t.drop(i + 1).joinToString(" "))
+        }
+        return if (out.isEmpty()) null else out
+    }
+
+    /** "אחת"/"שתיים"/... -> 0..3, "בטל" -> -2, אחרת -1 */
+    fun parseChoice(spoken: List<String>): Int {
+        for (alt in spoken) {
+            for (t in tokens(alt)) {
+                when (t) {
+                    "1", "אחת", "אחד", "ראשון", "ראשונה" -> return 0
+                    "2", "שתיים", "שתים", "שניים", "שנים", "שני", "שנייה", "שניה" -> return 1
+                    "3", "שלוש", "שלושה", "שלישי", "שלישית" -> return 2
+                    "4", "ארבע", "ארבעה", "רביעי", "רביעית" -> return 3
+                    "בטל", "ביטול", "עזוב", "לא", "cancel" -> return -2
+                }
+            }
+        }
+        return -1
+    }
+
     /** "חייג ל 050 123 4567" -> 0501234567 */
     fun extractNumber(spoken: List<String>): String {
         for (alt in spoken) {

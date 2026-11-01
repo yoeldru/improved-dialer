@@ -104,7 +104,7 @@ class CallActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.btnKeypad).setOnClickListener {
             dtmfKeypad.visibility = if (dtmfKeypad.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
-        Keypad.build(dtmfKeypad, showLetters = false, textColor = 0xFFFFFFFF.toInt(), onKey = { k -> sendDtmf(k) }, onLongKey = { false })
+        Keypad.build(dtmfKeypad, showLetters = false, textColor = 0xFFFFFFFF.toInt(), onKey = { k -> sendDtmf(k) }, onLongKey = { false }, dark = true)
 
         val pm = getSystemService(PowerManager::class.java)
         if (pm != null && pm.isWakeLockLevelSupported(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK)) {

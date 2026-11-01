@@ -92,8 +92,12 @@ class DialerFragment : Fragment(R.layout.fragment_dialer) {
             if (typed.isEmpty()) PhoneUtils.toast(requireContext(), "הקלד מספר כדי לפתוח צ'אט בוואטסאפ")
             else PhoneUtils.openWhatsApp(requireContext(), typed.toString(), null)
         }
-        view.findViewById<ImageButton>(R.id.btnMic).setOnClickListener {
-            (activity as? MainActivity)?.startVoiceDial()
+        val mic = view.findViewById<ImageButton>(R.id.btnMic)
+        mic.setOnClickListener { (activity as? MainActivity)?.startVoiceDial() }
+        // לחיצה ארוכה על המיקרופון = הדלקה/כיבוי מצב נהיגה
+        mic.setOnLongClickListener {
+            (activity as? MainActivity)?.toggleDrivingMode()
+            true
         }
         refresh()
     }
