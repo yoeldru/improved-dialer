@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.speech.RecognizerIntent
+import android.view.View
 import android.widget.ImageButton
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -64,14 +65,52 @@ class MainActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.btnSettings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
+        findViewById<ImageButton>(R.id.btnShare).setOnClickListener { Updater.share(this) }
+        findViewById<View>(R.id.updateChip).setOnClickListener {
+            Updater.pending(this)?.let { Updater.prompt(this, it) }
+        }
 
         handleIntent(intent)
         requestPermissionsIfNeeded()
+        Updater.schedule(this)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshUpdateBadge()
+        checkForUpdate()
+    }
+
+    // ---------- עדכונים ----------
+
+    private var promptedThisSession = 0L
+
+    private fun refreshUpdateBadge() {
+        val has = Updater.pending(this) != null
+        findViewById<View>(R.id.updateDot).visibility = if (has) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.updateChip).visibility = if (has) View.VISIBLE else View.GONE
+    }
+
+    private fun checkForUpdate() {
+        val fromNotification = intent?.getBooleanExtra(Updater.EXTRA_SHOW_UPDATE, false) == true
+        if (fromNotification) intent?.removeExtra(Updater.EXTRA_SHOW_UPDATE)
+        lifecycleScope.launch {
+            val info = withContext(Dispatchers.IO) { Updater.check(applicationContext) }
+            refreshUpdateBadge()
+            if (info == null) return@launch
+            Updater.notifyIfNew(applicationContext, info)
+            // הודעה קופצת בתוך האפליקציה — פעם אחת לכל גרסה בכל פתיחה
+            if (fromNotification || promptedThisSession < info.versionCode) {
+                promptedThisSession = info.versionCode
+                if (!isFinishing) Updater.prompt(this@MainActivity, info)
+            }
+        }
     }
 
     private fun handleIntent(intent: Intent?) {

@@ -11,7 +11,11 @@ import android.widget.EditText
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -60,18 +64,37 @@ class SettingsActivity : AppCompatActivity() {
             startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
         }
 
-        val version = try {
-            packageManager.getPackageInfo(packageName, 0).versionName
-        } catch (e: Exception) {
-            ""
+        findViewById<TextView>(R.id.versionText).text = "חייגן משופר · גרסה " + Updater.currentVersionName(this)
+
+        // נכתב: 2026-11-01 12:25 — עדכונים ושיתוף
+        findViewById<MaterialButton>(R.id.btnUpdate).setOnClickListener {
+            Updater.pending(this)?.let { Updater.install(this, it) }
         }
-        findViewById<TextView>(R.id.versionText).text = "חייגן משופר · גרסה $version"
+        findViewById<MaterialButton>(R.id.btnCheckUpdate).setOnClickListener {
+            PhoneUtils.toast(this, "בודק...")
+            lifecycleScope.launch {
+                val info = withContext(Dispatchers.IO) { Updater.check(applicationContext) }
+                refreshUpdateButton()
+                if (info != null) Updater.prompt(this@SettingsActivity, info)
+                else PhoneUtils.toast(this@SettingsActivity, "יש לך את הגרסה האחרונה ✔")
+            }
+        }
+        findViewById<MaterialButton>(R.id.btnShareApp).setOnClickListener { Updater.share(this) }
+
         updateStatus()
     }
 
     override fun onResume() {
         super.onResume()
         updateStatus()
+        refreshUpdateButton()
+    }
+
+    private fun refreshUpdateButton() {
+        val info = Updater.pending(this)
+        val btn = findViewById<MaterialButton>(R.id.btnUpdate)
+        btn.visibility = if (info != null) android.view.View.VISIBLE else android.view.View.GONE
+        if (info != null) btn.text = "🔴 עדכון לגרסה " + info.versionName + " — עדכן עכשיו"
     }
 
     private fun updateStatus() {

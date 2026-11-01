@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- נכתב: 2026-11-01 10:50 (שעון ישראל) — חייגן משופר: הגדרות -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="true">
@@ -17,6 +18,31 @@
             android:text="הגדרות"
             android:textSize="24sp"
             android:textStyle="bold" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnUpdate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="🔴 עדכון זמין — עדכן עכשיו"
+            android:textColor="@android:color/white"
+            android:visibility="gone"
+            app:backgroundTint="#FFE53935" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCheckUpdate"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="בדוק אם יש עדכון" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnShareApp"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📤 שתף את האפליקציה עם אחרים" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnDefault"
