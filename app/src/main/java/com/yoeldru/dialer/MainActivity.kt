@@ -39,7 +39,10 @@ class MainActivity : AppCompatActivity() {
         requestRoleIfNeeded()
     }
 
-    private val roleLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
+    // עודכן: 2026-11-01 20:15 — אם ההגדרה נחסמה, מציגים הסבר איך לאשר "הגדרות מוגבלות"
+    private val roleLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (!PhoneUtils.isDefaultDialer(this)) DefaultDialerHelp.show(this)
+    }
 
     // נכתב: 2026-11-01 13:05 — הרשאת מיקרופון למצב נהיגה
     private val micLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -219,16 +222,17 @@ class MainActivity : AppCompatActivity() {
     // ---------- חיוג קולי ----------
 
     fun startVoiceDial() {
-        val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "he-IL")
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "למי לחייג? למשל: \"חייג לאושרה ראש\"")
-        }
+        // עודכן: 2026-11-01 20:15 — מנוע של גוגל ועברית מפורשת
+        val i = SpeechHelper.activityIntent(this, "למי לחייג? למשל: \"אושרה ראש\"")
         try {
             voiceLauncher.launch(i)
         } catch (e: ActivityNotFoundException) {
-            PhoneUtils.toast(this, "זיהוי דיבור לא זמין במכשיר")
+            try {
+                i.setPackage(null)
+                voiceLauncher.launch(i)
+            } catch (e2: ActivityNotFoundException) {
+                PhoneUtils.toast(this, "זיהוי דיבור לא זמין במכשיר")
+            }
         }
     }
 
@@ -255,7 +259,7 @@ class MainActivity : AppCompatActivity() {
                         PhoneUtils.toast(this@MainActivity, "מחייג ל-$num")
                         PhoneUtils.placeCall(this@MainActivity, num)
                     } else {
-                        PhoneUtils.toast(this@MainActivity, "לא נמצא איש קשר מתאים ל: \"" + spoken[0] + "\"")
+                        PhoneUtils.toastLong(this@MainActivity, "שמעתי: \"" + spoken[0] + "\" — לא נמצא איש קשר מתאים")
                     }
                 }
             }

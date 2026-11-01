@@ -1,4 +1,5 @@
 // נכתב: 2026-11-01 10:55 (שעון ישראל) — חייגן משופר: התאמת חיוג קולי לאנשי קשר
+// עודכן: 2026-11-01 20:10 — התאמה סלחנית יותר (כתיב חסר/מלא, אותיות דומות, מילות מילוי), מילת התעוררות גמישה
 package com.yoeldru.dialer
 
 import kotlin.math.max
@@ -7,10 +8,16 @@ import kotlin.math.min
 object VoiceMatcher {
 
     private val commandWords = setOf(
-        "חייג", "חייגי", "תחייג", "תחייגי", "לחייג", "חיוג",
+        "חייג", "חייגי", "תחייג", "תחייגי", "לחייג", "חיוג", "חיג", "תחיג",
         "התקשר", "התקשרי", "תתקשר", "תתקשרי", "להתקשר",
-        "צלצל", "תצלצל", "תצלצלי", "שיחה", "בבקשה", "אל",
+        "צלצל", "תצלצל", "תצלצלי", "שיחה", "שיחת", "בבקשה", "אל", "היי", "הי",
         "call", "dial", "phone", "please"
+    )
+
+    /** מילים שלא שייכות לשם — מדלגים עליהן */
+    private val fillerWords = setOf(
+        "את", "של", "ל", "לי", "עכשיו", "בבקשה", "אל", "טלפון", "לטלפון", "נייד", "לנייד",
+        "בית", "לבית", "הביתה", "מספר", "למספר", "הטלפון", "תודה", "אוקיי", "ok", "please", "to", "the"
     )
 
     fun normalize(s: String): String {
@@ -25,6 +32,7 @@ object VoiceMatcher {
                 else -> raw
             }
             if (ch in '֑'..'ׇ') continue // ניקוד וטעמים
+            if (ch == '\'' || ch == '"' || ch == '׳' || ch == '״') continue // גרש/גרשיים: ג'ני -> גני
             if (ch.isLetterOrDigit()) sb.append(ch) else sb.append(' ')
         }
         return sb.toString().trim().replace(Regex("\\s+"), " ")
@@ -32,20 +40,46 @@ object VoiceMatcher {
 
     private fun tokens(s: String): List<String> = normalize(s).split(' ').filter { it.isNotEmpty() }
 
-    private fun queryTokens(spoken: String): List<String> {
-        val t = tokens(spoken).toMutableList()
-        while (t.isNotEmpty() && t[0] in commandWords) t.removeAt(0)
-        return t.filter { it != "בבקשה" && it != "please" && !it.all { ch -> ch.isDigit() } }
+    /**
+     * "שלד" של מילה — מתעלם מהבדלי כתיב: בלי ו/י, וא/ה/ע נחשבים אותו דבר, וכך גם ק/כ, ט/ת, ס/ש, ב/ו.
+     * כך "אושרה" = "אשרה" = "עושרא", "יעקב" = "יעקוב".
+     */
+    private fun skeleton(tok: String): String {
+        val sb = StringBuilder()
+        for ((i, raw) in tok.withIndex()) {
+            val ch = when (raw) {
+                'ו', 'י' -> if (i == 0) raw else continue
+                'ה', 'ע' -> 'א'
+                'ק' -> 'כ'
+                'ט' -> 'ת'
+                'ס' -> 'ש'
+                else -> raw
+            }
+            if (sb.isNotEmpty() && sb.last() == ch) continue // אותיות כפולות
+            sb.append(ch)
+        }
+        return sb.toString()
     }
 
-    /** "לאושרה" -> גם "אושרה" */
+    private fun queryTokens(spoken: String): List<String> {
+        val t = tokens(spoken).toMutableList()
+        while (t.isNotEmpty() && (t[0] in commandWords || isWake(t[0]))) t.removeAt(0)
+        return t.filter { it !in fillerWords && !it.all { ch -> ch.isDigit() } }
+    }
+
+    /** "לאושרה" -> גם "אושרה"; "ולמשה" -> "משה"; "שלמשה" -> "משה" */
     private fun variants(tok: String): List<String> {
         val v = mutableListOf(tok)
-        if (tok.length > 2 && tok[0] == 'ל') v.add(tok.substring(1))
+        for (prefix in listOf("ל", "ול", "של", "את", "ה")) {
+            if (tok.length > prefix.length + 1 && tok.startsWith(prefix)) v.add(tok.substring(prefix.length))
+        }
         return v
     }
 
     private fun lev(a: String, b: String): Int {
+        if (a == b) return 0
+        if (a.isEmpty()) return b.length
+        if (b.isEmpty()) return a.length
         val prev = IntArray(b.length + 1) { it }
         val cur = IntArray(b.length + 1)
         for (i in 1..a.length) {
@@ -61,11 +95,17 @@ object VoiceMatcher {
 
     private fun tokenScore(q: String, n: String): Double {
         if (q == n) return 3.0
-        if (q.length >= 2 && n.startsWith(q)) return 2.0
+        if (q.length >= 2 && n.startsWith(q)) return 2.2
         if (n.length >= 2 && q.startsWith(n) && q.length - n.length <= 2) return 2.0
+        val sq = skeleton(q)
+        val sn = skeleton(n)
+        if (sq.isNotEmpty() && sq == sn) return 2.5
+        if (sq.length >= 2 && sn.startsWith(sq)) return 1.8
         val maxLen = max(q.length, n.length)
         val d = lev(q, n)
         if (maxLen >= 3 && d == 1) return 1.5
+        val ds = lev(sq, sn)
+        if (max(sq.length, sn.length) >= 3 && ds == 1) return 1.3
         if (maxLen >= 5 && d == 2) return 1.0
         return 0.0
     }
@@ -73,6 +113,7 @@ object VoiceMatcher {
     private fun contactScore(query: List<String>, nameTokens: List<String>): Double {
         if (query.isEmpty() || nameTokens.isEmpty()) return 0.0
         var total = 0.0
+        var matched = 0
         val used = HashSet<Int>()
         for (q in query) {
             var best = 0.0
@@ -87,11 +128,17 @@ object VoiceMatcher {
                     }
                 }
             }
-            if (best == 0.0) return 0.0 // כל מילה שנאמרה חייבת להתאים
-            used.add(bestIdx)
-            total += best
+            if (best > 0.0) {
+                used.add(bestIdx)
+                total += best
+                matched++
+            } else {
+                total -= 0.7 // מילה שלא התאימה — קנס, אבל לא פוסל
+            }
         }
-        if (query.size == nameTokens.size) total += 0.5
+        // לפחות מחצית מהמילים שנאמרו צריכות להתאים
+        if (matched == 0 || matched * 2 < query.size) return 0.0
+        if (matched == nameTokens.size) total += 0.6
         return total
     }
 
@@ -122,19 +169,32 @@ object VoiceMatcher {
         return out
     }
 
-    // נכתב: 2026-11-01 12:50 — עזרים למצב נהיגה
+    // ---------- מצב נהיגה ----------
+
     private val commandStarts = setOf(
-        "חייג", "חייגי", "תחייג", "תחייגי", "התקשר", "התקשרי", "תתקשר", "תתקשרי", "צלצל", "תצלצל"
+        "חייג", "חייגי", "תחייג", "תחייגי", "חיג", "תחיג", "התקשר", "התקשרי", "תתקשר", "תתקשרי", "צלצל", "תצלצל"
     )
-    private val wakeWord = normalize("חייגן")
+
+    /** איך זיהוי הדיבור עלול לכתוב "חייגן" */
+    private val wakeForms = setOf("חייגנ", "חיגנ", "הייגנ", "היגנ", "חייגני", "חיגני", "חייגימ", "חגנ")
+    private val wakeSkeleton = skeleton(normalize("חייגן"))
+
+    fun isWake(tok: String): Boolean {
+        if (tok in wakeForms) return true
+        if (tok.length < 3) return false
+        val s = skeleton(tok)
+        return s == wakeSkeleton || (s.length >= 3 && lev(s, wakeSkeleton) <= 1 && s.startsWith("ח"))
+    }
 
     /** האם המשפט מתחיל בפקודת חיוג ("חייג ל...") */
     fun startsWithCommand(s: String): Boolean {
         val t = tokens(s)
-        return t.isNotEmpty() && t[0] in commandStarts && t.size >= 2
+        return t.size >= 2 && t[0] in commandStarts
     }
 
-    private fun isWake(tok: String): Boolean = tok == wakeWord || (tok.length >= 4 && lev(tok, wakeWord) <= 1)
+    /** אמרו רק "חייג" — מתייחסים כמו "חייגן" */
+    fun isBareCommand(spoken: List<String>): Boolean =
+        spoken.any { val t = tokens(it); t.size == 1 && t[0] in commandStarts }
 
     /** אם נאמרה מילת ההתעוררות "חייגן" — מחזיר את מה שנאמר אחריה (יכול להיות ריק). אחרת null */
     fun afterWakeWord(spoken: List<String>): List<String>? {
@@ -152,11 +212,11 @@ object VoiceMatcher {
         for (alt in spoken) {
             for (t in tokens(alt)) {
                 when (t) {
-                    "1", "אחת", "אחד", "ראשון", "ראשונה" -> return 0
-                    "2", "שתיים", "שתים", "שניים", "שנים", "שני", "שנייה", "שניה" -> return 1
-                    "3", "שלוש", "שלושה", "שלישי", "שלישית" -> return 2
-                    "4", "ארבע", "ארבעה", "רביעי", "רביעית" -> return 3
-                    "בטל", "ביטול", "עזוב", "לא", "cancel" -> return -2
+                    "1", "אחת", "אחד", "ראשון", "ראשונה", "הראשון", "הראשונה" -> return 0
+                    "2", "שתיים", "שתים", "שניים", "שנים", "שני", "שנייה", "שניה", "השני", "השנייה" -> return 1
+                    "3", "שלוש", "שלושה", "שלישי", "שלישית", "השלישי", "השלישית" -> return 2
+                    "4", "ארבע", "ארבעה", "רביעי", "רביעית", "הרביעי" -> return 3
+                    "בטל", "ביטול", "תבטל", "עזוב", "לא", "cancel" -> return -2
                 }
             }
         }

@@ -1,4 +1,5 @@
 // נכתב: 2026-11-01 12:55 (שעון ישראל) — חייגן משופר: מצב נהיגה — האזנה למילת "חייגן" וחיוג קולי בלי ידיים
+// עודכן: 2026-11-01 20:20 — מנוע גוגל בעברית, "שמעתי: ..." בהתראה, קול בעברית, גמישות במילת ההתעוררות
 package com.yoeldru.dialer
 
 import android.app.NotificationChannel
@@ -78,9 +79,25 @@ class DrivingModeService : Service() {
         return START_STICKY
     }
 
+    private var lastHeard = ""
+
     private fun startInForeground() {
         val nm = getSystemService(NotificationManager::class.java)
         nm?.createNotificationChannel(NotificationChannel(CHANNEL, "מצב נהיגה", NotificationManager.IMPORTANCE_LOW))
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
+        ServiceCompat.startForeground(this, NOTIF_ID, buildNotification(), type)
+    }
+
+    /** מעדכן את ההתראה עם מה שנשמע — כדי לראות מה הטלפון הבין */
+    private fun showHeard(text: String) {
+        lastHeard = text
+        try {
+            getSystemService(NotificationManager::class.java)?.notify(NOTIF_ID, buildNotification())
+        } catch (e: SecurityException) {
+        }
+    }
+
+    private fun buildNotification(): android.app.Notification {
         val stopPi = PendingIntent.getService(
             this, 30, Intent(this, DrivingModeService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
@@ -92,13 +109,13 @@ class DrivingModeService : Service() {
         val n = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_notif_call)
             .setContentTitle("🚗 מצב נהיגה פעיל — מאזין")
-            .setContentText("אמור: \"חייגן, חייג לאושרה ראש\"")
+            .setContentText(if (lastHeard.isEmpty()) "אמור: \"חייגן, אושרה ראש\"" else "שמעתי: \"$lastHeard\"")
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setContentIntent(openPi)
             .addAction(0, "עצור", stopPi)
             .build()
-        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
-        ServiceCompat.startForeground(this, NOTIF_ID, n, type)
+        return n
     }
 
     private fun setup() {
@@ -106,11 +123,17 @@ class DrivingModeService : Service() {
             if (ContactsRepo.phones.isEmpty()) ContactsRepo.load(applicationContext)
         }.start()
 
-        tts = TextToSpeech(this) { status ->
+        val ttsInit = TextToSpeech.OnInitListener { status ->
             if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.forLanguageTag("he-IL")
-                ttsReady = true
+                val r = tts?.setLanguage(Locale.forLanguageTag("he-IL")) ?: TextToSpeech.LANG_NOT_SUPPORTED
+                ttsReady = r >= TextToSpeech.LANG_AVAILABLE
+                if (!ttsReady) PhoneUtils.toast(this, "אין קול עברי במכשיר — התשובות יוצגו כהודעה")
             }
+        }
+        tts = try {
+            TextToSpeech(this, ttsInit, "com.google.android.tts")
+        } catch (e: Exception) {
+            TextToSpeech(this, ttsInit)
         }
         tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
@@ -133,9 +156,14 @@ class DrivingModeService : Service() {
         handler.postDelayed({ speak("מצב נהיגה פעיל. אמור חייגן, ואת שם איש הקשר") }, 600)
     }
 
+    private var preferGoogle = true
+
     private fun createRecognizer() {
-        recognizer?.destroy()
-        recognizer = SpeechRecognizer.createSpeechRecognizer(this).also { it.setRecognitionListener(listener) }
+        try {
+            recognizer?.destroy()
+        } catch (e: Exception) {
+        }
+        recognizer = SpeechHelper.create(this, preferGoogle).also { it.setRecognitionListener(listener) }
     }
 
     private fun listen() {
@@ -146,11 +174,11 @@ class DrivingModeService : Service() {
             handler.postDelayed(listenRunnable, 3000)
             return
         }
-        val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "he-IL")
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+        val i = SpeechHelper.hebrewExtras(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)).apply {
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
+            // מאפשר הפסקה קצרה בין "חייגן" לשם
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
         }
         try {
             recognizer?.startListening(i)
@@ -178,6 +206,14 @@ class DrivingModeService : Service() {
                     PhoneUtils.toast(this@DrivingModeService, "חסרה הרשאת מיקרופון")
                     stopSelf()
                 }
+                12, 13 -> {
+                    // השפה לא נתמכת במנוע הזה — עוברים למנוע אחר
+                    preferGoogle = !preferGoogle
+                    handler.postDelayed({
+                        createRecognizer()
+                        listen()
+                    }, 800)
+                }
                 SpeechRecognizer.ERROR_RECOGNIZER_BUSY, SpeechRecognizer.ERROR_CLIENT,
                 SpeechRecognizer.ERROR_SERVER, SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> {
                     handler.postDelayed({
@@ -203,6 +239,7 @@ class DrivingModeService : Service() {
         override fun onResults(results: Bundle?) {
             if (!active) return
             val list = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: arrayListOf()
+            if (list.isNotEmpty()) showHeard(list[0])
             handle(list)
         }
     }
@@ -214,6 +251,12 @@ class DrivingModeService : Service() {
         }
         when (mode) {
             Mode.WAKE -> {
+                if (VoiceMatcher.isBareCommand(list)) {
+                    mode = Mode.NAME
+                    misses = 0
+                    speak("למי לחייג?")
+                    return
+                }
                 val afterWake = VoiceMatcher.afterWakeWord(list)
                 val isCommand = list.any { VoiceMatcher.startsWithCommand(it) }
                 if (afterWake == null && !isCommand) {
@@ -268,7 +311,7 @@ class DrivingModeService : Service() {
                     return
                 }
                 misses++
-                if (misses >= 2 || mode == Mode.WAKE) {
+                if (misses >= 2) {
                     resetToWake()
                     speak("לא מצאתי איש קשר מתאים")
                 } else {

@@ -56,6 +56,10 @@ object PhoneUtils {
         Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
     }
 
+    fun toastLong(ctx: Context, msg: String) {
+        Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
+    }
+
     fun isDefaultDialer(ctx: Context): Boolean {
         val tm = ctx.getSystemService(TelecomManager::class.java) ?: return false
         return tm.defaultDialerPackage == ctx.packageName

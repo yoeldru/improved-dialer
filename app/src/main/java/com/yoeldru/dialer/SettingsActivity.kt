@@ -23,6 +23,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private val roleLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         updateStatus()
+        if (!PhoneUtils.isDefaultDialer(this)) DefaultDialerHelp.show(this)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
