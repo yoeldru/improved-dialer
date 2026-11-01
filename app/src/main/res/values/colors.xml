@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- נכתב: 2026-11-01 10:45 (שעון ישראל) — חייגן משופר -->
+<resources>
+    <color name="brand">#FF1B8A5A</color>
+    <color name="call_green">#FF1FA463</color>
+    <color name="end_red">#FFE53935</color>
+    <color name="whatsapp">#FF25D366</color>
+    <color name="missed">#FFE53935</color>
+    <color name="call_bg">#FF0F1720</color>
+</resources>

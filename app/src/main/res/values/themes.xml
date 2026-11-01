@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- נכתב: 2026-11-01 10:45 (שעון ישראל) — חייגן משופר -->
+<resources>
+    <style name="Theme.Dialer" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/brand</item>
+        <item name="colorSecondary">@color/brand</item>
+        <item name="android:statusBarColor">?android:attr/colorBackground</item>
+    </style>
+    <style name="Theme.Dialer.Call" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/call_green</item>
+        <item name="android:windowBackground">@color/call_bg</item>
+        <item name="android:statusBarColor">@color/call_bg</item>
+        <item name="android:navigationBarColor">@color/call_bg</item>
+    </style>
+    <style name="CircleImage">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
+</resources>

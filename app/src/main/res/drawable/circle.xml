@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- נכתב: 2026-11-01 10:45 (שעון ישראל) — חייגן משופר -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="#FF7986CB" />
+</shape>

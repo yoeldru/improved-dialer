@@ -1,0 +1,355 @@
+// נכתב: 2026-11-01 11:15 (שעון ישראל) — חייגן משופר: מסך שיחה נכנסת/פעילה, דחייה עם וואטסאפ/SMS, בחירת SIM
+package com.yoeldru.dialer
+
+import android.app.KeyguardManager
+import android.content.Intent
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.PowerManager
+import android.telecom.Call
+import android.telecom.CallAudioState
+import android.telecom.PhoneAccountHandle
+import android.telecom.TelecomManager
+import android.telecom.VideoProfile
+import android.view.View
+import android.view.WindowManager
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.floatingactionbutton.FloatingActionButton
+
+class CallActivity : AppCompatActivity() {
+
+    companion object {
+        const val EXTRA_ANSWER = "answer"
+    }
+
+    private lateinit var photo: ImageView
+    private lateinit var initial: TextView
+    private lateinit var nameView: TextView
+    private lateinit var numberView: TextView
+    private lateinit var statusView: TextView
+    private lateinit var extraView: TextView
+    private lateinit var incomingPanel: View
+    private lateinit var ongoingPanel: View
+    private lateinit var dtmfKeypad: LinearLayout
+    private lateinit var btnMute: MaterialButton
+    private lateinit var btnSpeaker: MaterialButton
+    private lateinit var btnHold: MaterialButton
+    private lateinit var btnSwap: MaterialButton
+
+    private val handler = Handler(Looper.getMainLooper())
+    private var shownNumber: String? = null
+    private var accountDialogShown = false
+    private var keepOpen = false        // לא לסגור בזמן שפותחים וואטסאפ
+    private var finishing = false
+    private var dtmfTyped = StringBuilder()
+    private var proximityLock: PowerManager.WakeLock? = null
+
+    private val listener: () -> Unit = { runOnUiThread { render() } }
+
+    private val ticker = object : Runnable {
+        override fun run() {
+            updateStatus()
+            handler.postDelayed(this, 1000)
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setShowWhenLocked(true)
+        setTurnScreenOn(true)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        setContentView(R.layout.activity_call)
+
+        photo = findViewById(R.id.photo)
+        initial = findViewById(R.id.initial)
+        nameView = findViewById(R.id.callName)
+        numberView = findViewById(R.id.callNumber)
+        statusView = findViewById(R.id.callStatus)
+        extraView = findViewById(R.id.callExtra)
+        incomingPanel = findViewById(R.id.incomingPanel)
+        ongoingPanel = findViewById(R.id.ongoingPanel)
+        dtmfKeypad = findViewById(R.id.dtmfKeypad)
+        btnMute = findViewById(R.id.btnMute)
+        btnSpeaker = findViewById(R.id.btnSpeaker)
+        btnHold = findViewById(R.id.btnHold)
+        btnSwap = findViewById(R.id.btnSwap)
+
+        findViewById<FloatingActionButton>(R.id.btnAnswer).setOnClickListener { answer() }
+        findViewById<FloatingActionButton>(R.id.btnReject).setOnClickListener {
+            CallManager.primary()?.reject(false, null)
+        }
+        findViewById<MaterialButton>(R.id.btnRejectWa).setOnClickListener { rejectWithWhatsApp() }
+        findViewById<MaterialButton>(R.id.btnRejectSms).setOnClickListener { rejectWithSms() }
+        findViewById<FloatingActionButton>(R.id.btnHangup).setOnClickListener {
+            CallManager.primary()?.disconnect()
+        }
+        btnMute.setOnClickListener { CallManager.service?.toggleMute() }
+        btnSpeaker.setOnClickListener { CallManager.service?.toggleSpeaker() }
+        btnHold.setOnClickListener {
+            val call = CallManager.primary() ?: return@setOnClickListener
+            if (CallManager.stateOf(call) == Call.STATE_HOLDING) call.unhold() else call.hold()
+        }
+        btnSwap.setOnClickListener {
+            val held = CallManager.heldCall() ?: return@setOnClickListener
+            val active = CallManager.calls.firstOrNull { CallManager.stateOf(it) == Call.STATE_ACTIVE }
+            active?.hold()
+            held.unhold()
+        }
+        findViewById<MaterialButton>(R.id.btnKeypad).setOnClickListener {
+            dtmfKeypad.visibility = if (dtmfKeypad.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+        }
+        Keypad.build(dtmfKeypad, showLetters = false, textColor = 0xFFFFFFFF.toInt(), onKey = { k -> sendDtmf(k) }, onLongKey = { false })
+
+        val pm = getSystemService(PowerManager::class.java)
+        if (pm != null && pm.isWakeLockLevelSupported(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK)) {
+            proximityLock = pm.newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "ImprovedDialer:proximity")
+        }
+
+        if (intent.getBooleanExtra(EXTRA_ANSWER, false)) answer()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_ANSWER, false)) answer()
+        render()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        CallManager.addListener(listener)
+        handler.post(ticker)
+        render()
+    }
+
+    override fun onStop() {
+        CallManager.removeListener(listener)
+        handler.removeCallbacks(ticker)
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        releaseProximity()
+        handler.removeCallbacksAndMessages(null)
+        super.onDestroy()
+    }
+
+    private fun answer() {
+        val call = CallManager.calls.firstOrNull { CallManager.isRinging(it) } ?: return
+        call.answer(VideoProfile.STATE_AUDIO_ONLY)
+    }
+
+    private fun sendDtmf(k: Char) {
+        val call = CallManager.primary() ?: return
+        call.playDtmfTone(k)
+        handler.postDelayed({ call.stopDtmfTone() }, 180)
+        dtmfTyped.append(k)
+        extraView.visibility = View.VISIBLE
+        extraView.text = dtmfTyped.toString()
+    }
+
+    private fun render() {
+        if (finishing) return
+        val call = CallManager.primary()
+        if (call == null) {
+            releaseProximity()
+            if (!keepOpen) {
+                finishing = true
+                statusView.text = "השיחה הסתיימה"
+                incomingPanel.visibility = View.GONE
+                ongoingPanel.visibility = View.GONE
+                handler.postDelayed({ finishAndRemoveTask() }, 900)
+            }
+            return
+        }
+        val state = CallManager.stateOf(call)
+        val number = CallManager.numberOf(call)
+        if (number != shownNumber) {
+            shownNumber = number
+            dtmfTyped.setLength(0)
+            val info = ContactsRepo.lookup(this, number)
+            val display = info.name ?: number.ifEmpty { "מספר חסוי" }
+            nameView.text = display
+            numberView.text = if (info.name != null) number else ""
+            Avatar.bind(photo, initial, display, info.photo)
+        }
+
+        val ringing = state == Call.STATE_RINGING
+        incomingPanel.visibility = if (ringing) View.VISIBLE else View.GONE
+        ongoingPanel.visibility = if (ringing) View.GONE else View.VISIBLE
+
+        val audio = CallManager.audioState
+        val muted = audio?.isMuted ?: false
+        val speaker = audio?.route == CallAudioState.ROUTE_SPEAKER
+        btnMute.alpha = if (muted) 1f else 0.6f
+        btnMute.text = if (muted) "🔇\nמושתק" else "🎤\nהשתק"
+        btnSpeaker.alpha = if (speaker) 1f else 0.6f
+        btnSpeaker.text = if (speaker) "🔊\nרמקול פעיל" else "🔈\nרמקול"
+        btnHold.text = if (state == Call.STATE_HOLDING) "▶\nהמשך" else "⏸\nהמתנה"
+        btnSwap.visibility = if (CallManager.calls.size > 1 && CallManager.heldCall() != null && !ringing) View.VISIBLE else View.GONE
+
+        if (!ringing && dtmfTyped.isEmpty()) {
+            val others = CallManager.calls.size - 1
+            if (others > 0) {
+                extraView.visibility = View.VISIBLE
+                extraView.text = "שיחה נוספת בהמתנה"
+            } else {
+                extraView.visibility = View.GONE
+            }
+        } else if (ringing) {
+            val active = CallManager.calls.any { CallManager.stateOf(it) == Call.STATE_ACTIVE }
+            extraView.visibility = if (active) View.VISIBLE else View.GONE
+            extraView.text = "שיחה ממתינה — מענה יעביר את השיחה הנוכחית להמתנה"
+        }
+
+        // חיישן קירבה: מסך כבוי כשהטלפון צמוד לאוזן
+        if (state == Call.STATE_ACTIVE || state == Call.STATE_DIALING) {
+            if (speaker) releaseProximity() else acquireProximity()
+        } else {
+            releaseProximity()
+        }
+
+        if (state == Call.STATE_SELECT_PHONE_ACCOUNT && !accountDialogShown) showAccountPicker(call)
+        updateStatus()
+    }
+
+    private fun updateStatus() {
+        if (finishing) return
+        val call = CallManager.primary() ?: return
+        statusView.text = when (CallManager.stateOf(call)) {
+            Call.STATE_RINGING -> "שיחה נכנסת"
+            Call.STATE_DIALING, Call.STATE_CONNECTING -> "מחייג..."
+            Call.STATE_SELECT_PHONE_ACCOUNT -> "בחר כרטיס SIM"
+            Call.STATE_HOLDING -> "בהמתנה"
+            Call.STATE_DISCONNECTING, Call.STATE_DISCONNECTED -> "השיחה הסתיימה"
+            Call.STATE_ACTIVE -> {
+                val start = call.details?.connectTimeMillis ?: 0L
+                if (start > 0) formatDuration((System.currentTimeMillis() - start) / 1000) else "מחובר"
+            }
+            else -> ""
+        }
+    }
+
+    private fun formatDuration(sec: Long): String {
+        val h = sec / 3600
+        val m = (sec % 3600) / 60
+        val s = sec % 60
+        return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%02d:%02d", m, s)
+    }
+
+    private fun acquireProximity() {
+        val l = proximityLock ?: return
+        if (!l.isHeld) l.acquire(3 * 60 * 60 * 1000L)
+    }
+
+    private fun releaseProximity() {
+        val l = proximityLock ?: return
+        if (l.isHeld) l.release()
+    }
+
+    // ---------- דחייה עם הודעה ----------
+
+    private fun rejectWithWhatsApp() {
+        val call = CallManager.calls.firstOrNull { CallManager.isRinging(it) } ?: return
+        val number = CallManager.numberOf(call)
+        if (number.isBlank()) {
+            PhoneUtils.toast(this, "מספר חסוי — אי אפשר לשלוח וואטסאפ")
+            return
+        }
+        val msgs = Prefs.quickMessages(this)
+        val items = (msgs + "✏ בלי הודעה — רק לפתוח צ'אט").toTypedArray()
+        MaterialAlertDialogBuilder(this)
+            .setTitle("דחייה והודעה בוואטסאפ")
+            .setItems(items) { _, which ->
+                val text = if (which < msgs.size) msgs[which] else null
+                keepOpen = true
+                call.reject(false, null)
+                openWhatsAppUnlocked(number, text)
+            }
+            .setNegativeButton("ביטול", null)
+            .show()
+    }
+
+    private fun openWhatsAppUnlocked(number: String, text: String?) {
+        val km = getSystemService(KeyguardManager::class.java)
+        if (km != null && km.isKeyguardLocked) {
+            PhoneUtils.toast(this, "פתח את הנעילה כדי לשלוח בוואטסאפ")
+            km.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
+                override fun onDismissSucceeded() {
+                    PhoneUtils.openWhatsApp(this@CallActivity, number, text)
+                    closeNow()
+                }
+
+                override fun onDismissCancelled() {
+                    closeNow()
+                }
+
+                override fun onDismissError() {
+                    closeNow()
+                }
+            })
+        } else {
+            PhoneUtils.openWhatsApp(this, number, text)
+            closeNow()
+        }
+    }
+
+    private fun rejectWithSms() {
+        val call = CallManager.calls.firstOrNull { CallManager.isRinging(it) } ?: return
+        if (CallManager.numberOf(call).isBlank()) {
+            PhoneUtils.toast(this, "מספר חסוי — אי אפשר לשלוח SMS")
+            return
+        }
+        val msgs = Prefs.quickMessages(this)
+        MaterialAlertDialogBuilder(this)
+            .setTitle("דחייה והודעת SMS")
+            .setItems(msgs.toTypedArray()) { _, which -> call.reject(true, msgs[which]) }
+            .setNegativeButton("ביטול", null)
+            .show()
+    }
+
+    private fun closeNow() {
+        keepOpen = false
+        if (CallManager.primary() == null) {
+            finishing = true
+            finishAndRemoveTask()
+        } else {
+            render()
+        }
+    }
+
+    // ---------- בחירת SIM (כשהטלפון מוגדר "שאל בכל פעם") ----------
+
+    private fun showAccountPicker(call: Call) {
+        accountDialogShown = true
+        val tm = getSystemService(TelecomManager::class.java)
+        val handles: List<PhoneAccountHandle> = try {
+            tm?.callCapablePhoneAccounts ?: emptyList()
+        } catch (e: SecurityException) {
+            emptyList()
+        }
+        if (handles.isEmpty()) {
+            PhoneUtils.toast(this, "לא נמצא כרטיס SIM זמין")
+            call.disconnect()
+            return
+        }
+        if (handles.size == 1) {
+            call.phoneAccountSelected(handles[0], false)
+            return
+        }
+        val labels = handles.map { h ->
+            tm?.getPhoneAccount(h)?.label?.toString() ?: h.id
+        }.toTypedArray()
+        MaterialAlertDialogBuilder(this)
+            .setTitle("לחייג דרך איזה SIM?")
+            .setItems(labels) { _, which -> call.phoneAccountSelected(handles[which], false) }
+            .setOnCancelListener { call.disconnect() }
+            .show()
+    }
+}

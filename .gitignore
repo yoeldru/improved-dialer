@@ -1,0 +1,7 @@
+# נכתב: 2026-11-01 11:20 (שעון ישראל)
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
