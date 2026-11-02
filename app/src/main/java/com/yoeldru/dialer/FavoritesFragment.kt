@@ -1,5 +1,6 @@
 // נכתב: 2026-11-01 11:05 (שעון ישראל) — חייגן משופר: מסך מועדפים עם תמונות (לחיצה = חיוג)
 // עודכן: 2026-11-01 13:20 — מצב סידור: לחיצה ארוכה וגרירה, הסדר נשמר
+// עודכן: 2026-11-02 20:20 — מצב סידור כרשימה עם חיצי למעלה/למטה, בסיום חוזר לעיגולים
 package com.yoeldru.dialer
 
 import android.os.Bundle
@@ -13,6 +14,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +35,9 @@ class FavoritesFragment : Fragment(R.layout.fragment_favorites) {
     ) {
         override fun isLongPressDragEnabled(): Boolean = arranging
 
+        override fun getMovementFlags(rv: RecyclerView, vh: RecyclerView.ViewHolder): Int =
+            if (!arranging) 0 else makeMovementFlags(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0)
+
         override fun onMove(rv: RecyclerView, vh: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
             val from = vh.bindingAdapterPosition
             val to = target.bindingAdapterPosition
@@ -47,7 +52,7 @@ class FavoritesFragment : Fragment(R.layout.fragment_favorites) {
             super.onSelectedChanged(vh, actionState)
             if (actionState == ItemTouchHelper.ACTION_STATE_DRAG && vh != null) {
                 vh.itemView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                vh.itemView.animate().scaleX(1.12f).scaleY(1.12f).alpha(0.85f).setDuration(120).start()
+                vh.itemView.animate().scaleX(1.03f).scaleY(1.03f).alpha(0.85f).setDuration(120).start()
             }
         }
 
@@ -82,9 +87,15 @@ class FavoritesFragment : Fragment(R.layout.fragment_favorites) {
     private fun setArranging(on: Boolean) {
         arranging = on
         arrangeBtn.text = if (on) "✔ סיום" else "↕ סדר"
-        hint.text = if (on) "לחיצה ארוכה על תמונה וגרירה למקום החדש" else "לחיצה = חיוג · לחיצה ארוכה = אפשרויות"
+        hint.text = if (on) "▲▼ להזזה, או גרירה של ☰" else "לחיצה = חיוג · לחיצה ארוכה = אפשרויות"
         (activity as? MainActivity)?.setPagerSwipe(!on)
-        if (!on) saveOrder()
+        if (!on) {
+            saveOrder()
+            PhoneUtils.toast(requireContext(), "הסדר נשמר ✔")
+        }
+        // רשימה בזמן סידור, עיגולים בסיום
+        grid.layoutManager = if (on) LinearLayoutManager(requireContext()) else GridLayoutManager(requireContext(), 3)
+        grid.adapter = adapter
         adapter.notifyDataSetChanged()
     }
 
@@ -148,33 +159,63 @@ class FavoritesFragment : Fragment(R.layout.fragment_favorites) {
             }
 
         fun move(from: Int, to: Int) {
+            if (from == to || to < 0 || to >= items.size) return
             val item = items.removeAt(from)
             items.add(to, item)
             notifyItemMoved(from, to)
+            // עדכון המספרים ליד השמות
+            notifyItemRangeChanged(minOf(from, to), Math.abs(from - to) + 1, "pos")
         }
 
         inner class VH(v: View) : RecyclerView.ViewHolder(v) {
             val photo: ImageView = v.findViewById(R.id.photo)
             val initial: TextView = v.findViewById(R.id.initial)
             val name: TextView = v.findViewById(R.id.name)
+            val posText: TextView? = v.findViewById(R.id.position)
+            val up: View? = v.findViewById(R.id.btnUp)
+            val down: View? = v.findViewById(R.id.btnDown)
+            val handle: View? = v.findViewById(R.id.handle)
         }
 
+        override fun getItemViewType(position: Int): Int = if (arranging) 1 else 0
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH =
-            VH(LayoutInflater.from(parent.context).inflate(R.layout.item_favorite, parent, false))
+            VH(LayoutInflater.from(parent.context).inflate(if (viewType == 1) R.layout.item_fav_row else R.layout.item_favorite, parent, false))
 
         override fun getItemCount(): Int = items.size
 
         override fun onBindViewHolder(h: VH, position: Int) {
             val f = items[position]
             Avatar.bind(h.photo, h.initial, f.name, f.photo)
-            h.name.text = if (arranging) "↕ " + f.name else f.name
+            h.name.text = f.name
             if (arranging) {
-                // במצב סידור: לחיצה ארוכה = גרירה (ItemTouchHelper), לחיצה רגילה לא מחייגת
-                h.itemView.setOnClickListener {
-                    PhoneUtils.toast(requireContext(), "לחיצה ארוכה וגרירה כדי להזיז")
-                }
+                h.posText?.text = (position + 1).toString()
+                h.itemView.setOnClickListener(null)
                 h.itemView.setOnLongClickListener(null)
                 h.itemView.isLongClickable = false
+                h.up?.alpha = if (position == 0) 0.25f else 1f
+                h.down?.alpha = if (position == items.size - 1) 0.25f else 1f
+                h.up?.setOnClickListener {
+                    val p = h.bindingAdapterPosition
+                    if (p > 0) {
+                        move(p, p - 1)
+                        grid.scrollToPosition(p - 1)
+                        saveOrder()
+                    }
+                }
+                h.down?.setOnClickListener {
+                    val p = h.bindingAdapterPosition
+                    if (p != RecyclerView.NO_POSITION && p < items.size - 1) {
+                        move(p, p + 1)
+                        grid.scrollToPosition(p + 1)
+                        saveOrder()
+                    }
+                }
+                // נגיעה בידית ☰ מתחילה גרירה מיד
+                h.handle?.setOnTouchListener { _, ev ->
+                    if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) touchHelper.startDrag(h)
+                    false
+                }
             } else {
                 h.itemView.setOnClickListener { onFavClick(f) }
                 h.itemView.setOnLongClickListener {

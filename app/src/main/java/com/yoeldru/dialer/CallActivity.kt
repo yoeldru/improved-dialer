@@ -54,6 +54,36 @@ class CallActivity : AppCompatActivity() {
 
     private val listener: () -> Unit = { runOnUiThread { render() } }
 
+    // ---------- נכתב: 2026-11-02 20:35 — מעבר לרקע אחרי כמה שניות (וויז / ניווט) ----------
+    private var autoBackScheduledFor: android.telecom.Call? = null
+    private var userTouched = false
+    private val goBackRunnable = Runnable {
+        if (!userTouched && !isFinishing && CallManager.primary() != null &&
+            CallManager.primary()?.let { CallManager.isRinging(it) } != true
+        ) {
+            moveTaskToBack(true)
+        }
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        // המשתמש נוגע במסך — לא מעבירים לרקע
+        userTouched = true
+        handler.removeCallbacks(goBackRunnable)
+    }
+
+    private fun maybeScheduleAutoBack(call: android.telecom.Call, state: Int) {
+        if (autoBackScheduledFor === call) return
+        val outgoingStarted = state == Call.STATE_DIALING || state == Call.STATE_CONNECTING
+        val answered = state == Call.STATE_ACTIVE
+        if (!outgoingStarted && !answered) return
+        if (!AutoBackground.shouldGoBack(this)) return
+        autoBackScheduledFor = call
+        userTouched = false
+        handler.removeCallbacks(goBackRunnable)
+        handler.postDelayed(goBackRunnable, AutoBackground.seconds(this) * 1000L)
+    }
+
     private val ticker = object : Runnable {
         override fun run() {
             updateStatus()
@@ -253,6 +283,7 @@ class CallActivity : AppCompatActivity() {
         }
 
         if (state == Call.STATE_SELECT_PHONE_ACCOUNT && !accountDialogShown) showAccountPicker(call)
+        maybeScheduleAutoBack(call, state)
         updateStatus()
     }
 

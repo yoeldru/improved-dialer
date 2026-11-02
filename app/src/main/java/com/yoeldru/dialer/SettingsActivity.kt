@@ -52,6 +52,42 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
+        // נכתב: 2026-11-02 20:40 — מעבר לרקע בזמן ניווט
+        val modeGroup = findViewById<android.widget.RadioGroup>(R.id.autoBgMode)
+        modeGroup.check(
+            when (AutoBackground.mode(this)) {
+                AutoBackground.MODE_ALWAYS -> R.id.autoBgAlways
+                AutoBackground.MODE_OFF -> R.id.autoBgOff
+                else -> R.id.autoBgNav
+            }
+        )
+        modeGroup.setOnCheckedChangeListener { _, id ->
+            val m = when (id) {
+                R.id.autoBgAlways -> AutoBackground.MODE_ALWAYS
+                R.id.autoBgOff -> AutoBackground.MODE_OFF
+                else -> AutoBackground.MODE_NAV_ONLY
+            }
+            AutoBackground.setMode(this, m)
+            if (m == AutoBackground.MODE_NAV_ONLY && !AutoBackground.hasUsageAccess(this)) askUsageAccess()
+            refreshAutoBg()
+        }
+        val secLabel = findViewById<TextView>(R.id.autoBgSecondsLabel)
+        val slider = findViewById<com.google.android.material.slider.Slider>(R.id.autoBgSeconds)
+        slider.value = AutoBackground.seconds(this).coerceIn(2, 15).toFloat()
+        secLabel.text = "מעבר לרקע אחרי ${slider.value.toInt()} שניות"
+        slider.addOnChangeListener { _, v, _ ->
+            AutoBackground.setSeconds(this, v.toInt())
+            secLabel.text = "מעבר לרקע אחרי ${v.toInt()} שניות"
+        }
+        findViewById<MaterialButton>(R.id.btnNavApps).setOnClickListener { pickNavApps() }
+        findViewById<MaterialButton>(R.id.btnUsageAccess).setOnClickListener {
+            try {
+                startActivity(AutoBackground.usageAccessIntent())
+            } catch (e: Exception) {
+                PhoneUtils.toast(this, "פתח הגדרות ← גישה לנתוני שימוש")
+            }
+        }
+
         // נכתב: 2026-11-02 20:25 — מצב נהיגה: מילת הפעלה, פקודה ישירה, בדיקת שמיעה
         val wakeEdit = findViewById<EditText>(R.id.editWake)
         wakeEdit.setText(Prefs.wakeWord(this))
@@ -114,6 +150,7 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        refreshAutoBg()
         updateStatus()
         refreshUpdateButton()
     }
@@ -135,6 +172,54 @@ class SettingsActivity : AppCompatActivity() {
                     "\n\nאנשי קשר מתאימים:\n" + (if (matches.isEmpty()) "— לא נמצא —" else matches.take(5).joinToString("\n") { "• $it" })
             )
             .setPositiveButton("סגור", null)
+            .show()
+    }
+
+    private fun refreshAutoBg() {
+        val b = findViewById<MaterialButton>(R.id.btnUsageAccess)
+        val ok = AutoBackground.hasUsageAccess(this)
+        b.text = if (ok) "✔ יש גישה לזיהוי האפליקציה הפתוחה" else "⚠ אשר \"גישה לנתוני שימוש\" (נדרש לזיהוי וויז)"
+        b.visibility = if (AutoBackground.mode(this) == AutoBackground.MODE_OFF) android.view.View.GONE else android.view.View.VISIBLE
+    }
+
+    private fun askUsageAccess() {
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("זיהוי וויז")
+            .setMessage("כדי לדעת שוויז פתוח, האפליקציה צריכה \"גישה לנתוני שימוש\".\n\nבמסך שייפתח: בחר \"חייגן משופר\" והפעל.\n(אם האפשרות אפורה — קודם \"התר הגדרות מוגבלות\" כמו בהגדרת חייגן ברירת מחדל.)")
+            .setPositiveButton("לאישור") { _, _ ->
+                try {
+                    startActivity(AutoBackground.usageAccessIntent())
+                } catch (e: Exception) {
+                }
+            }
+            .setNegativeButton("אחר כך", null)
+            .show()
+    }
+
+    /** בחירת אפליקציות: מתוך האפליקציות המותקנות, אפליקציות ניווט מסומנות מראש */
+    private fun pickNavApps() {
+        val pm = packageManager
+        val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val apps = pm.queryIntentActivities(launcher, 0)
+            .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+            .filter { it.first != packageName }
+            .distinctBy { it.first }
+        val selected = AutoBackground.apps(this).toMutableSet()
+        // אפליקציות מסומנות קודם, אחר כך לפי שם
+        val sorted = apps.sortedWith(compareBy<Pair<String, String>> { if (it.first in selected) 0 else 1 }.thenBy { it.second })
+        val labels = sorted.map { it.second }.toTypedArray()
+        val checked = sorted.map { it.first in selected }.toBooleanArray()
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("אפליקציות שבזמן שהן פתוחות — מסך השיחה יעבור לרקע")
+            .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
+                if (isChecked) selected.add(sorted[which].first) else selected.remove(sorted[which].first)
+            }
+            .setPositiveButton("שמור") { _, _ ->
+                AutoBackground.setApps(this, selected)
+                PhoneUtils.toast(this, "נשמר (${selected.count { s -> apps.any { it.first == s } }} אפליקציות)")
+            }
+            .setNeutralButton("ברירת מחדל") { _, _ -> AutoBackground.setApps(this, AutoBackground.defaultApps) }
+            .setNegativeButton("ביטול", null)
             .show()
     }
 

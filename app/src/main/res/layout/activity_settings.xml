@@ -87,6 +87,74 @@
             android:layout_height="wrap_content"
             android:text="שמור הודעות" />
 
+        <!-- נכתב: 2026-11-02 20:40 — מעבר לרקע בזמן ניווט -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="🧭 מסך השיחה בזמן ניווט (וויז)"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:alpha="0.7"
+            android:text="אחרי חיוג או מענה, מסך השיחה יוצג כמה שניות ואז יעבור לרקע — כדי שהניווט יישאר מול העיניים. נגיעה במסך השיחה מבטלת."
+            android:textSize="13sp" />
+
+        <RadioGroup
+            android:id="@+id/autoBgMode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <RadioButton
+                android:id="@+id/autoBgNav"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="רק כשאפליקציית ניווט פתוחה (מומלץ)" />
+
+            <RadioButton
+                android:id="@+id/autoBgAlways"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="תמיד — לחזור לאפליקציה שהייתה פתוחה" />
+
+            <RadioButton
+                android:id="@+id/autoBgOff"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="כבוי" />
+        </RadioGroup>
+
+        <TextView
+            android:id="@+id/autoBgSecondsLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textSize="14sp" />
+
+        <com.google.android.material.slider.Slider
+            android:id="@+id/autoBgSeconds"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:stepSize="1"
+            android:valueFrom="2"
+            android:valueTo="15" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnNavApps"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="בחר אפליקציות ניווט / שכבה עליונה" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnUsageAccess"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
         <!-- נכתב: 2026-11-02 20:25 — הגדרות חיוג קולי / מצב נהיגה -->
         <TextView
             android:layout_width="match_parent"

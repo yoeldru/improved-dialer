@@ -22,6 +22,8 @@ class DialerInCallService : InCallService() {
 
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
+        // נכתב: 2026-11-02 20:30 — זוכרים מה היה פתוח (וויז וכו') כדי לחזור אליו
+        if (CallManager.calls.isEmpty()) AutoBackground.previousApp = AutoBackground.detectPreviousApp(this)
         CallManager.onAdded(call)
         updateNotification()
         // שיחה יוצאת: פותחים מיד את מסך השיחה. שיחה נכנסת: ההתראה פותחת מסך מלא.
