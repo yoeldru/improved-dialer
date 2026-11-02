@@ -16,7 +16,9 @@ class PhoneEntry(
     val label: String,
     val photo: String?,
     val starred: Boolean,
-    val type: Int = 0
+    val type: Int = 0,
+    val dataId: Long = 0L,
+    val superPrimary: Boolean = false
 ) {
     val t9Words: List<String> by lazy { T9.wordsToT9(name) }
     val local: String by lazy { PhoneUtils.localDigits(number) }
@@ -48,7 +50,9 @@ object ContactsRepo {
             ContactsContract.CommonDataKinds.Phone.TYPE,
             ContactsContract.CommonDataKinds.Phone.LABEL,
             ContactsContract.CommonDataKinds.Phone.PHOTO_THUMBNAIL_URI,
-            ContactsContract.CommonDataKinds.Phone.STARRED
+            ContactsContract.CommonDataKinds.Phone.STARRED,
+            ContactsContract.CommonDataKinds.Phone._ID,
+            ContactsContract.CommonDataKinds.Phone.IS_SUPER_PRIMARY
         )
         try {
             ctx.contentResolver.query(
@@ -65,7 +69,7 @@ object ContactsRepo {
                     val customLabel = c.getString(4)
                     val label = ContactsContract.CommonDataKinds.Phone
                         .getTypeLabel(ctx.resources, type, customLabel).toString()
-                    list.add(PhoneEntry(id, name, num, label, c.getString(5), c.getInt(6) == 1, type))
+                    list.add(PhoneEntry(id, name, num, label, c.getString(5), c.getInt(6) == 1, type, c.getLong(7), c.getInt(8) == 1))
                 }
             }
         } catch (e: Exception) {
@@ -77,6 +81,60 @@ object ContactsRepo {
     }
 
     fun numbersOf(contactId: Long): List<PhoneEntry> = phones.filter { it.contactId == contactId }
+
+    // ---------- נכתב: 2026-11-02 20:05 — מספר ברירת מחדל לאיש קשר ----------
+    private const val PREF_FILE = "default_numbers"
+
+    /** המספר שנקבע כברירת מחדל (בחירה באפליקציה, או "ברירת מחדל" שנקבעה באנשי הקשר של הטלפון) */
+    fun defaultFor(ctx: Context, contactId: Long): PhoneEntry? {
+        val nums = numbersOf(contactId)
+        if (nums.isEmpty()) return null
+        if (nums.size == 1) return nums[0]
+        val saved = ctx.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE).getString(contactId.toString(), null)
+        if (saved != null) nums.firstOrNull { it.local == saved }?.let { return it }
+        return nums.firstOrNull { it.superPrimary }
+    }
+
+    fun hasExplicitDefault(ctx: Context, contactId: Long): Boolean {
+        val nums = numbersOf(contactId)
+        if (nums.size < 2) return false
+        val saved = ctx.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE).getString(contactId.toString(), null)
+        return (saved != null && nums.any { it.local == saved }) || nums.any { it.superPrimary }
+    }
+
+    /** קובע (או מנקה, אם entry == null) מספר ברירת מחדל — גם באפליקציה וגם באנשי הקשר של הטלפון */
+    fun setDefault(ctx: Context, contactId: Long, entry: PhoneEntry?) {
+        val sp = ctx.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE).edit()
+        if (entry == null) sp.remove(contactId.toString()) else sp.putString(contactId.toString(), entry.local)
+        sp.apply()
+        try {
+            val cr = ctx.contentResolver
+            // מנקים ברירת מחדל קודמת
+            for (p in numbersOf(contactId)) {
+                if (p.dataId <= 0) continue
+                val v = ContentValues().apply {
+                    put(ContactsContract.Data.IS_SUPER_PRIMARY, 0)
+                    put(ContactsContract.Data.IS_PRIMARY, 0)
+                }
+                cr.update(ContactsContract.Data.CONTENT_URI, v, ContactsContract.Data._ID + "=?", arrayOf(p.dataId.toString()))
+            }
+            if (entry != null && entry.dataId > 0) {
+                val v = ContentValues().apply {
+                    put(ContactsContract.Data.IS_SUPER_PRIMARY, 1)
+                    put(ContactsContract.Data.IS_PRIMARY, 1)
+                }
+                cr.update(ContactsContract.Data.CONTENT_URI, v, ContactsContract.Data._ID + "=?", arrayOf(entry.dataId.toString()))
+            }
+        } catch (e: Exception) {
+            // אם אין הרשאה — נשמר לפחות באפליקציה
+        }
+        // מעדכנים את הרשימה בזיכרון
+        phones = phones.map { p ->
+            if (p.contactId != contactId) p
+            else PhoneEntry(p.contactId, p.name, p.number, p.label, p.photo, p.starred, p.type, p.dataId,
+                entry != null && p.dataId == entry.dataId && p.local == entry.local)
+        }
+    }
 
     fun loadFavorites(ctx: Context): List<Favorite> {
         if (!hasPermission(ctx)) return emptyList()

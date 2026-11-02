@@ -261,7 +261,13 @@ class MainActivity : AppCompatActivity() {
             val phones = withContext(Dispatchers.IO) {
                 if (ContactsRepo.phones.isEmpty()) ContactsRepo.load(applicationContext) else ContactsRepo.phones
             }
-            val candidates = VoiceMatcher.match(spoken, phones)
+            // עודכן: 2026-11-02 20:20 — איש קשר עם מספר ברירת מחדל מוצג פעם אחת
+            val raw = VoiceMatcher.match(spoken, phones)
+            val candidates = raw.groupBy { it.contactId }.values.flatMap { group ->
+                val def = if (ContactsRepo.hasExplicitDefault(this@MainActivity, group[0].contactId))
+                    ContactsRepo.defaultFor(this@MainActivity, group[0].contactId) else null
+                if (def != null) listOf(def) else group
+            }
             when {
                 candidates.size == 1 -> {
                     val p = candidates[0]

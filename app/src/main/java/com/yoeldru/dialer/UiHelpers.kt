@@ -229,14 +229,82 @@ object Dialogs {
         dialog.show()
     }
 
-    /** איש קשר עם כמה מספרים — בחירת מספר */
-    fun withNumber(ctx: Context, contactId: Long, name: String, action: (String) -> Unit) {
+    /**
+     * איש קשר עם כמה מספרים: אם נקבעה ברירת מחדל — משתמשים בה מיד; אחרת חלון בחירה
+     * עם תיבת סימון "זכור כברירת מחדל". forcePick = תמיד להציג בחירה.
+     * עודכן: 2026-11-02 20:05
+     */
+    fun withNumber(ctx: Context, contactId: Long, name: String, forcePick: Boolean = false, action: (String) -> Unit) {
         val nums = ContactsRepo.numbersOf(contactId)
-        when {
-            nums.isEmpty() -> PhoneUtils.toast(ctx, "לא נמצא מספר")
-            nums.size == 1 -> action(nums[0].number)
-            else -> showCandidates(ctx, name, nums) { action(it.number) }
+        if (nums.isEmpty()) {
+            PhoneUtils.toast(ctx, "לא נמצא מספר")
+            return
         }
+        if (nums.size == 1) {
+            action(nums[0].number)
+            return
+        }
+        if (!forcePick && ContactsRepo.hasExplicitDefault(ctx, contactId)) {
+            ContactsRepo.defaultFor(ctx, contactId)?.let {
+                action(it.number)
+                return
+            }
+        }
+        pickNumber(ctx, contactId, name, rememberChecked = false) { action(it.number) }
+    }
+
+    /** חלון בחירת מספר + "זכור כברירת מחדל" */
+    fun pickNumber(
+        ctx: Context, contactId: Long, name: String, rememberChecked: Boolean,
+        title: String = name, onPick: (PhoneEntry) -> Unit
+    ) {
+        val nums = ContactsRepo.numbersOf(contactId)
+        val current = if (ContactsRepo.hasExplicitDefault(ctx, contactId)) ContactsRepo.defaultFor(ctx, contactId) else null
+        val box = LinearLayout(ctx)
+        box.orientation = LinearLayout.VERTICAL
+        val rv = RecyclerView(ctx)
+        rv.layoutManager = LinearLayoutManager(ctx)
+        val check = com.google.android.material.checkbox.MaterialCheckBox(ctx).apply {
+            text = "📌 זכור כמספר ברירת מחדל ל" + name
+            isChecked = rememberChecked
+            val pad = (16 * ctx.resources.displayMetrics.density).toInt()
+            setPadding(pad / 2, pad / 2, pad, pad / 2)
+        }
+        box.addView(rv)
+        box.addView(check)
+        val builder = MaterialAlertDialogBuilder(ctx)
+            .setTitle(title)
+            .setView(box)
+            .setNegativeButton("ביטול", null)
+        if (current != null) {
+            builder.setNeutralButton("נקה ברירת מחדל") { _, _ ->
+                ContactsRepo.setDefault(ctx, contactId, null)
+                PhoneUtils.toast(ctx, "ברירת המחדל נוקתה")
+            }
+        }
+        val dialog = builder.create()
+        val shown = nums.map { p ->
+            if (current != null && p.local == current.local) PhoneEntry(p.contactId, p.name + " 📌", p.number, p.label, p.photo, p.starred, p.type, p.dataId, true) else p
+        }
+        rv.adapter = CandidateAdapter(shown) { picked ->
+            dialog.dismiss()
+            val real = nums.firstOrNull { it.dataId == picked.dataId && it.local == picked.local } ?: picked
+            if (check.isChecked) {
+                ContactsRepo.setDefault(ctx, contactId, real)
+                PhoneUtils.toast(ctx, "📌 " + real.number + " נקבע כברירת מחדל")
+            }
+            onPick(real)
+        }
+        dialog.show()
+    }
+
+    /** קביעת מספר ברירת מחדל בלבד (בלי לחייג) */
+    fun chooseDefault(ctx: Context, contactId: Long, name: String) {
+        if (ContactsRepo.numbersOf(contactId).size < 2) {
+            PhoneUtils.toast(ctx, "לאיש קשר זה יש מספר אחד בלבד")
+            return
+        }
+        pickNumber(ctx, contactId, name, rememberChecked = true, title = "📌 מספר ברירת מחדל — $name") { }
     }
 
     /** תפריט לחיצה ארוכה על שורה */
@@ -251,6 +319,7 @@ object Dialogs {
         if (cid != null) {
             m.add(0, 5, 4, if (ContactsRepo.isStarred(cid)) "☆ הסר מהמועדפים" else "⭐ הוסף למועדפים")
             m.add(0, 6, 5, "👤 פתח איש קשר")
+            if (ContactsRepo.numbersOf(cid).size > 1) m.add(0, 9, 6, "📌 מספר ברירת מחדל")
         } else {
             m.add(0, 7, 4, "➕ הוסף לאנשי קשר")
         }
@@ -272,6 +341,7 @@ object Dialogs {
                 }
                 6 -> if (cid != null) PhoneUtils.openContact(ctx, cid)
                 7 -> PhoneUtils.addToContacts(ctx, row.number)
+                9 -> if (cid != null) chooseDefault(ctx, cid, row.title)
                 8 -> MaterialAlertDialogBuilder(ctx)
                     .setTitle("לחסום את " + row.number + "?")
                     .setPositiveButton("חסום") { _, _ -> PhoneUtils.blockNumber(ctx, row.number) }

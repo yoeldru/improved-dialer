@@ -25,6 +25,27 @@ object Prefs {
         ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putString(KEY_MESSAGES, text).apply()
     }
 
+    // נכתב: 2026-11-02 20:15 — מילת הפעלה וחיוג ישיר במצב נהיגה
+    private const val KEY_WAKE = "wake_word"
+    private const val KEY_DIRECT = "direct_commands"
+    const val DEFAULT_WAKE = "חייגן"
+
+    fun wakeWord(ctx: Context): String =
+        ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY_WAKE, DEFAULT_WAKE)?.trim()
+            ?.ifEmpty { DEFAULT_WAKE } ?: DEFAULT_WAKE
+
+    fun setWakeWord(ctx: Context, w: String) {
+        ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putString(KEY_WAKE, w.trim()).apply()
+    }
+
+    /** "תתקשר לאושרה ראש" בלי מילת הפעלה */
+    fun directCommands(ctx: Context): Boolean =
+        ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).getBoolean(KEY_DIRECT, true)
+
+    fun setDirectCommands(ctx: Context, on: Boolean) {
+        ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putBoolean(KEY_DIRECT, on).apply()
+    }
+
     // נכתב: 2026-11-01 13:15 — סדר המועדפים שהמשתמש קבע
     private const val KEY_FAV_ORDER = "fav_order"
 

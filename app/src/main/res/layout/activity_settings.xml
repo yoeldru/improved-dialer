@@ -87,6 +87,50 @@
             android:layout_height="wrap_content"
             android:text="שמור הודעות" />
 
+        <!-- נכתב: 2026-11-02 20:25 — הגדרות חיוג קולי / מצב נהיגה -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="🚗 מצב נהיגה — חיוג קולי"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switchDirect"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="פקודה ישירה בלי מילת הפעלה (&quot;תתקשר לאושרה ראש&quot;)" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:alpha="0.7"
+            android:text="מילת הפעלה (מילה אחת או שתיים). עדיף מילה מוכרת וברורה, למשל: טלפון, חייגן, היי טלפון"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/editWake"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text"
+            android:maxLines="1" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSaveWake"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="שמור מילת הפעלה" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnTestVoice"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🎤 בדיקה: מה הטלפון שומע?" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnRecordings"
             style="@style/Widget.Material3.Button.OutlinedButton"

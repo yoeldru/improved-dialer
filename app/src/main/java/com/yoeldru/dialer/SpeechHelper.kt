@@ -43,10 +43,30 @@ object SpeechHelper {
         putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
     }
 
+    /**
+     * "מכוון" את זיהוי הדיבור לשמות מאנשי הקשר ולמילת ההפעלה (אנדרואיד 13+).
+     * נכתב: 2026-11-02 20:20
+     */
+    fun addBiasing(ctx: Context, i: Intent) {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) return
+        val words = LinkedHashSet<String>()
+        words.add(Prefs.wakeWord(ctx))
+        words.addAll(listOf("חייג", "תתקשר", "התקשר"))
+        val phones = ContactsRepo.phones
+        // קודם מועדפים, אחר כך כל השאר
+        phones.filter { it.starred }.forEach { words.add(it.name) }
+        for (p in phones) {
+            if (words.size >= 150) break
+            words.add(p.name)
+        }
+        i.putStringArrayListExtra(RecognizerIntent.EXTRA_BIASING_STRINGS, ArrayList(words.filter { it.isNotBlank() }))
+    }
+
     /** מסך "דבר עכשיו" — עדיפות לגוגל */
     fun activityIntent(ctx: Context, prompt: String): Intent {
         val i = hebrewExtras(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH))
         i.putExtra(RecognizerIntent.EXTRA_PROMPT, prompt)
+        addBiasing(ctx, i)
         val google = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).setPackage(GOOGLE_APP)
         if (ctx.packageManager.resolveActivity(google, 0) != null) i.setPackage(GOOGLE_APP)
         return i

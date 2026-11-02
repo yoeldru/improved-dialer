@@ -120,6 +120,7 @@ class FavoritesFragment : Fragment(R.layout.fragment_favorites) {
         menu.menu.add(0, 1, 0, "💬 וואטסאפ")
         menu.menu.add(0, 2, 1, "✉ SMS")
         menu.menu.add(0, 3, 2, "👤 פתח איש קשר")
+        if (ContactsRepo.numbersOf(f.contactId).size > 1) menu.menu.add(0, 6, 3, "📌 מספר ברירת מחדל")
         menu.menu.add(0, 5, 3, "↕ סדר מועדפים")
         menu.menu.add(0, 4, 4, "☆ הסר מהמועדפים")
         menu.setOnMenuItemClickListener { item ->
@@ -132,6 +133,7 @@ class FavoritesFragment : Fragment(R.layout.fragment_favorites) {
                     reload()
                 }
                 5 -> setArranging(true)
+                6 -> Dialogs.chooseDefault(ctx, f.contactId, f.name)
             }
             true
         }

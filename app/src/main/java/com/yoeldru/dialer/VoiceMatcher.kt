@@ -159,6 +159,26 @@ object VoiceMatcher {
                 if (s > 0 && s > (best[id] ?: 0.0)) best[id] = s
             }
         }
+        // גיבוי: השוואת כל המשפט לשם המלא (כשהזיהוי חיבר/פיצל מילים, למשל "אושרהראש")
+        if (best.isEmpty()) {
+            for (alt in spoken) {
+                val joined = skeleton(queryTokens(alt).joinToString(""))
+                if (joined.length < 3) continue
+                for ((id, nt) in nameTokensById) {
+                    val full = skeleton(nt.joinToString(""))
+                    if (full.isEmpty()) continue
+                    val d = lev(joined, full)
+                    val limit = max(1, max(joined.length, full.length) / 4)
+                    val s = when {
+                        d == 0 -> 2.0
+                        d <= limit -> 1.5 - d * 0.1
+                        full.startsWith(joined) && joined.length >= 4 -> 1.0
+                        else -> 0.0
+                    }
+                    if (s > 0 && s > (best[id] ?: 0.0)) best[id] = s
+                }
+            }
+        }
         if (best.isEmpty()) return emptyList()
         val top = best.values.maxOrNull() ?: return emptyList()
         val chosen = best.filter { it.value >= top - 1.0 }
@@ -177,10 +197,20 @@ object VoiceMatcher {
 
     /** איך זיהוי הדיבור עלול לכתוב "חייגן" */
     private val wakeForms = setOf("חייגנ", "חיגנ", "הייגנ", "היגנ", "חייגני", "חיגני", "חייגימ", "חגנ")
-    private val wakeSkeleton = skeleton(normalize("חייגן"))
+    private var wakeSkeleton = skeleton(normalize("חייגן"))
+    private var customWakeTokens: List<String> = emptyList()
+    private var customIsDefault = true
+
+    /** קובע את מילת ההפעלה (מההגדרות). עודכן: 2026-11-02 20:15 */
+    fun setWakeWord(word: String) {
+        val t = tokens(word)
+        customWakeTokens = t
+        customIsDefault = t.size == 1 && skeleton(t[0]) == skeleton(normalize("חייגן"))
+        wakeSkeleton = if (t.size == 1) skeleton(t[0]) else skeleton(normalize("חייגן"))
+    }
 
     fun isWake(tok: String): Boolean {
-        if (tok in wakeForms) return true
+        if (customIsDefault && tok in wakeForms) return true
         if (tok.length < 3) return false
         val s = skeleton(tok)
         return s == wakeSkeleton || (s.length >= 3 && lev(s, wakeSkeleton) <= 1 && s.startsWith("ח"))
@@ -196,13 +226,33 @@ object VoiceMatcher {
     fun isBareCommand(spoken: List<String>): Boolean =
         spoken.any { val t = tokens(it); t.size == 1 && t[0] in commandStarts }
 
-    /** אם נאמרה מילת ההתעוררות "חייגן" — מחזיר את מה שנאמר אחריה (יכול להיות ריק). אחרת null */
+    /** אם נאמרה מילת ההפעלה — מחזיר את מה שנאמר אחריה (יכול להיות ריק). אחרת null */
     fun afterWakeWord(spoken: List<String>): List<String>? {
         val out = ArrayList<String>()
         for (alt in spoken) {
             val t = tokens(alt)
-            val i = t.indexOfFirst { isWake(it) }
-            if (i >= 0) out.add(t.drop(i + 1).joinToString(" "))
+            if (customWakeTokens.size > 1) {
+                // מילת הפעלה של כמה מילים, למשל "היי טלפון"
+                val n = customWakeTokens.size
+                for (i in 0..(t.size - n)) {
+                    var ok = true
+                    for (k in 0 until n) {
+                        val a = skeleton(t[i + k])
+                        val b = skeleton(customWakeTokens[k])
+                        if (a != b && !(max(a.length, b.length) >= 3 && lev(a, b) <= 1)) {
+                            ok = false
+                            break
+                        }
+                    }
+                    if (ok) {
+                        out.add(t.drop(i + n).joinToString(" "))
+                        break
+                    }
+                }
+            } else {
+                val i = t.indexOfFirst { isWake(it) }
+                if (i >= 0) out.add(t.drop(i + 1).joinToString(" "))
+            }
         }
         return if (out.isEmpty()) null else out
     }

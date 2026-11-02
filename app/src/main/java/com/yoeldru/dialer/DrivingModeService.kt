@@ -118,7 +118,12 @@ class DrivingModeService : Service() {
         return n
     }
 
+    private var directCommands = true
+
     private fun setup() {
+        // עודכן: 2026-11-02 20:20 — מילת הפעלה מההגדרות
+        VoiceMatcher.setWakeWord(Prefs.wakeWord(this))
+        directCommands = Prefs.directCommands(this)
         Thread {
             if (ContactsRepo.phones.isEmpty()) ContactsRepo.load(applicationContext)
         }.start()
@@ -153,7 +158,10 @@ class DrivingModeService : Service() {
             return
         }
         createRecognizer()
-        handler.postDelayed({ speak("מצב נהיגה פעיל. אמור חייגן, ואת שם איש הקשר") }, 600)
+        val wake = Prefs.wakeWord(this)
+        handler.postDelayed({
+            speak(if (directCommands) "מצב נהיגה פעיל. אמור תתקשר ל, ואת השם" else "מצב נהיגה פעיל. אמור $wake, ואת השם")
+        }, 600)
     }
 
     private var preferGoogle = true
@@ -180,6 +188,7 @@ class DrivingModeService : Service() {
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
         }
+        SpeechHelper.addBiasing(this, i)
         try {
             recognizer?.startListening(i)
         } catch (e: Exception) {
@@ -258,7 +267,7 @@ class DrivingModeService : Service() {
                     return
                 }
                 val afterWake = VoiceMatcher.afterWakeWord(list)
-                val isCommand = list.any { VoiceMatcher.startsWithCommand(it) }
+                val isCommand = directCommands && list.any { VoiceMatcher.startsWithCommand(it) }
                 if (afterWake == null && !isCommand) {
                     listen()
                     return
@@ -278,9 +287,10 @@ class DrivingModeService : Service() {
         }
     }
 
-    /** מספר מועדף לאיש קשר: נייד אם יש, אחרת הראשון */
+    /** מספר מועדף לאיש קשר: ברירת המחדל שנקבעה, אחרת נייד, אחרת הראשון */
     private fun preferred(entries: List<PhoneEntry>): PhoneEntry =
-        entries.firstOrNull { it.type == ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE } ?: entries[0]
+        ContactsRepo.defaultFor(this, entries[0].contactId)?.takeIf { ContactsRepo.hasExplicitDefault(this, it.contactId) }
+            ?: entries.firstOrNull { it.type == ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE } ?: entries[0]
 
     private fun resolve(texts: List<String>) {
         if (VoiceMatcher.parseChoice(texts) == -2) {

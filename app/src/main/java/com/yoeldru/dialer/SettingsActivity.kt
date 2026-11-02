@@ -52,6 +52,30 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
+        // נכתב: 2026-11-02 20:25 — מצב נהיגה: מילת הפעלה, פקודה ישירה, בדיקת שמיעה
+        val wakeEdit = findViewById<EditText>(R.id.editWake)
+        wakeEdit.setText(Prefs.wakeWord(this))
+        val direct = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.switchDirect)
+        direct.isChecked = Prefs.directCommands(this)
+        direct.setOnCheckedChangeListener { _, on -> Prefs.setDirectCommands(this, on); restartDrivingIfRunning() }
+        findViewById<MaterialButton>(R.id.btnSaveWake).setOnClickListener {
+            val w = wakeEdit.text.toString().trim()
+            if (w.isEmpty() || w.split(Regex("\\s+")).size > 2) {
+                PhoneUtils.toast(this, "מילה אחת או שתיים")
+            } else {
+                Prefs.setWakeWord(this, w)
+                PhoneUtils.toast(this, "נשמר: \"$w\"")
+                restartDrivingIfRunning()
+            }
+        }
+        findViewById<MaterialButton>(R.id.btnTestVoice).setOnClickListener {
+            try {
+                testLauncher.launch(SpeechHelper.activityIntent(this, "אמור משהו — למשל שם של איש קשר"))
+            } catch (e: Exception) {
+                PhoneUtils.toast(this, "זיהוי דיבור לא זמין")
+            }
+        }
+
         findViewById<MaterialButton>(R.id.btnRecordings).setOnClickListener {
             startActivity(Intent(this, RecordingsActivity::class.java))
         }
@@ -99,6 +123,26 @@ class SettingsActivity : AppCompatActivity() {
         val btn = findViewById<MaterialButton>(R.id.btnUpdate)
         btn.visibility = if (info != null) android.view.View.VISIBLE else android.view.View.GONE
         if (info != null) btn.text = "🔴 עדכון לגרסה " + info.versionName + " — עדכן עכשיו"
+    }
+
+    private val testLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+        val list = res.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS) ?: return@registerForActivityResult
+        val matches = VoiceMatcher.match(list, ContactsRepo.phones).map { it.name }.distinct()
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("🎤 תוצאת הבדיקה")
+            .setMessage(
+                "הטלפון שמע:\n" + list.joinToString("\n") { "• $it" } +
+                    "\n\nאנשי קשר מתאימים:\n" + (if (matches.isEmpty()) "— לא נמצא —" else matches.take(5).joinToString("\n") { "• $it" })
+            )
+            .setPositiveButton("סגור", null)
+            .show()
+    }
+
+    private fun restartDrivingIfRunning() {
+        if (DrivingModeService.running) {
+            DrivingModeService.stop(this)
+            DrivingModeService.start(this)
+        }
     }
 
     private fun updateStatus() {
