@@ -25,6 +25,7 @@ object CallManager {
 
     private val callback = object : Call.Callback() {
         override fun onStateChanged(call: Call, state: Int) {
+            if (calls.none { isRinging(it) }) CallerAnnouncer.stop()
             notifyChanged()
             service?.updateNotification()
         }

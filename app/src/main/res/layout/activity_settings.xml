@@ -87,6 +87,49 @@
             android:layout_height="wrap_content"
             android:text="שמור הודעות" />
 
+        <!-- נכתב: 2026-11-02 20:45 — הקראת שם המתקשר -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="🗣 הקראת שם המתקשר"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switchAnnounce"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="להקריא בקול מי מתקשר (&quot;שיחה מאושרה ראש&quot;)" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switchAnnounceExt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="רק כשמחוברת דיבורית / אוזניות, או במצב נהיגה" />
+
+        <TextView
+            android:id="@+id/announceRepeatLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textSize="14sp" />
+
+        <com.google.android.material.slider.Slider
+            android:id="@+id/announceRepeat"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:stepSize="1"
+            android:valueFrom="1"
+            android:valueTo="5" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnTestAnnounce"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🔊 השמע דוגמה" />
+
         <!-- נכתב: 2026-11-02 20:40 — מעבר לרקע בזמן ניווט -->
         <TextView
             android:layout_width="match_parent"

@@ -26,6 +26,8 @@ class DialerInCallService : InCallService() {
         if (CallManager.calls.isEmpty()) AutoBackground.previousApp = AutoBackground.detectPreviousApp(this)
         CallManager.onAdded(call)
         updateNotification()
+        // נכתב: 2026-11-02 20:40 — הקראת שם המתקשר
+        if (CallManager.isRinging(call)) CallerAnnouncer.onIncoming(this, CallManager.numberOf(call))
         // שיחה יוצאת: פותחים מיד את מסך השיחה. שיחה נכנסת: ההתראה פותחת מסך מלא.
         if (!CallManager.isRinging(call)) {
             try {
@@ -39,6 +41,7 @@ class DialerInCallService : InCallService() {
         super.onCallRemoved(call)
         CallManager.onRemoved(call)
         updateNotification()
+        if (CallManager.calls.none { CallManager.isRinging(it) }) CallerAnnouncer.stop()
         // כל השיחות הסתיימו — עוצרים הקלטה אם יש
         if (CallManager.calls.isEmpty()) RecordingService.stop(this)
     }

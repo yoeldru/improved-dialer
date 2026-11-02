@@ -52,6 +52,27 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
+        // נכתב: 2026-11-02 20:45 — הקראת שם המתקשר
+        val annSwitch = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.switchAnnounce)
+        val annExt = findViewById<com.google.android.material.materialswitch.MaterialSwitch>(R.id.switchAnnounceExt)
+        annSwitch.isChecked = CallerAnnouncer.enabled(this)
+        annExt.isChecked = CallerAnnouncer.onlyExternal(this)
+        annExt.isEnabled = annSwitch.isChecked
+        annSwitch.setOnCheckedChangeListener { _, on ->
+            CallerAnnouncer.setEnabled(this, on)
+            annExt.isEnabled = on
+        }
+        annExt.setOnCheckedChangeListener { _, on -> CallerAnnouncer.setOnlyExternal(this, on) }
+        val repLabel = findViewById<TextView>(R.id.announceRepeatLabel)
+        val repSlider = findViewById<com.google.android.material.slider.Slider>(R.id.announceRepeat)
+        repSlider.value = CallerAnnouncer.repeats(this).coerceIn(1, 5).toFloat()
+        repLabel.text = "להקריא ${repSlider.value.toInt()} פעמים"
+        repSlider.addOnChangeListener { _, v, _ ->
+            CallerAnnouncer.setRepeats(this, v.toInt())
+            repLabel.text = "להקריא ${v.toInt()} פעמים"
+        }
+        findViewById<MaterialButton>(R.id.btnTestAnnounce).setOnClickListener { CallerAnnouncer.test(this) }
+
         // נכתב: 2026-11-02 20:40 — מעבר לרקע בזמן ניווט
         val modeGroup = findViewById<android.widget.RadioGroup>(R.id.autoBgMode)
         modeGroup.check(
