@@ -152,7 +152,13 @@ class DialerFragment : Fragment(R.layout.fragment_dialer) {
                 val count = if (rc.count > 1) " (${rc.count})" else ""
                 val time = DateUtils.getRelativeTimeSpanString(rc.date, now, DateUtils.MINUTE_IN_MILLIS, DateUtils.FORMAT_ABBREV_RELATIVE)
                 val title = (rc.name ?: rc.number.ifEmpty { "מספר חסוי" }) + count
-                val sub = if (rc.name != null) "$arrow · ${rc.number} · $time" else "$arrow · $time"
+                // נכתב: 2026-11-02 22:40 — משך השיחה בשורה (רק לשיחות שנענו)
+                val dur = formatDuration(rc.durationSec)
+                val parts = mutableListOf(arrow)
+                if (rc.name != null) parts.add(rc.number)
+                parts.add(time.toString())
+                if (dur != null) parts.add("⏱ $dur")
+                val sub = parts.joinToString(" · ")
                 Row(title, sub, rc.number, rc.photo, rc.contactId, rc.type == CallLog.Calls.MISSED_TYPE)
             }
             emptyText.visibility = if (recents.isEmpty()) View.VISIBLE else View.GONE
@@ -165,6 +171,19 @@ class DialerFragment : Fragment(R.layout.fragment_dialer) {
             emptyText.text = "לא נמצאו אנשי קשר — לחץ על החיוג כדי לחייג למספר"
         }
         if (adapter.itemCount > 0) results.scrollToPosition(0)
+    }
+
+    /** 45 -> "45 שנ׳", 205 -> "3:25", 3725 -> "1:02:05"; 0 -> null */
+    private fun formatDuration(sec: Long): String? {
+        if (sec <= 0) return null
+        val h = sec / 3600
+        val m = (sec % 3600) / 60
+        val s = sec % 60
+        return when {
+            h > 0 -> String.format("%d:%02d:%02d", h, m, s)
+            m > 0 -> String.format("%d:%02d", m, s)
+            else -> "$s שנ׳"
+        }
     }
 
     private fun search(q: String): List<PhoneEntry> {

@@ -14,7 +14,8 @@ class RecentCall(
     val date: Long,
     val photo: String?,
     val contactId: Long?,
-    var count: Int
+    var count: Int,
+    val durationSec: Long = 0L // נכתב: 2026-11-02 22:40 — משך השיחה (של האחרונה בקבוצה)
 )
 
 object CallLogRepo {
@@ -31,7 +32,8 @@ object CallLogRepo {
             CallLog.Calls.CACHED_NAME,
             CallLog.Calls.TYPE,
             CallLog.Calls.DATE,
-            CallLog.Calls.CACHED_PHOTO_URI
+            CallLog.Calls.CACHED_PHOTO_URI,
+            CallLog.Calls.DURATION
         )
         try {
             ctx.contentResolver.query(CallLog.Calls.CONTENT_URI, proj, null, null, CallLog.Calls.DATE + " DESC")?.use { c ->
@@ -50,7 +52,7 @@ object CallLogRepo {
                     val entry = byLocal[PhoneUtils.localDigits(number)]
                     val name = c.getString(1)?.takeIf { it.isNotBlank() } ?: entry?.name
                     val photo = c.getString(4) ?: entry?.photo
-                    out.add(RecentCall(number, name, type, date, photo, entry?.contactId, 1))
+                    out.add(RecentCall(number, name, type, date, photo, entry?.contactId, 1, c.getLong(5)))
                 }
             }
         } catch (e: Exception) {
