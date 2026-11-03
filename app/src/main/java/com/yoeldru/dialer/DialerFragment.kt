@@ -58,6 +58,12 @@ class DialerFragment : Fragment(R.layout.fragment_dialer) {
             }
         )
 
+        // נכתב: 2026-11-03 14:40 — X מנקה הכל
+        view.findViewById<ImageButton>(R.id.btnClear).setOnClickListener {
+            typed.setLength(0)
+            refresh()
+        }
+
         val backspace = view.findViewById<ImageButton>(R.id.btnBackspace)
         backspace.setOnClickListener {
             if (typed.isNotEmpty()) {
@@ -136,6 +142,7 @@ class DialerFragment : Fragment(R.layout.fragment_dialer) {
 
     private fun refresh() {
         display.text = typed.toString()
+        view?.findViewById<View>(R.id.btnClear)?.visibility = if (typed.isEmpty()) View.INVISIBLE else View.VISIBLE
         val q = typed.toString()
         if (q.isEmpty()) {
             header.text = "שיחות אחרונות"

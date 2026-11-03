@@ -61,12 +61,11 @@ object AutoBackground {
             val now = System.currentTimeMillis()
             val events = usm.queryEvents(now - 10 * 60 * 1000L, now)
             val e = UsageEvents.Event()
+            // עודכן: 2026-11-03 14:45 — האפליקציה האחרונה שעלתה למסך (כולל אנחנו), כדי לא "לחזור" לוויז ישן
             var last: String? = null
             while (events.hasNextEvent()) {
                 events.getNextEvent(e)
-                if (e.eventType == UsageEvents.Event.ACTIVITY_RESUMED && e.packageName != ctx.packageName) {
-                    last = e.packageName
-                }
+                if (e.eventType == UsageEvents.Event.ACTIVITY_RESUMED) last = e.packageName
             }
             last
         } catch (e: Exception) {
@@ -75,7 +74,12 @@ object AutoBackground {
     }
 
     /** האם להעביר את מסך השיחה לרקע */
-    fun shouldGoBack(ctx: Context): Boolean = when (mode(ctx)) {
+    fun shouldGoBack(ctx: Context): Boolean {
+        if (previousApp == ctx.packageName) return false // החיוג היה מתוך האפליקציה
+        return modeDecision(ctx)
+    }
+
+    private fun modeDecision(ctx: Context): Boolean = when (mode(ctx)) {
         MODE_ALWAYS -> previousApp != null || !hasUsageAccess(ctx)
         MODE_NAV_ONLY -> previousApp?.let { it in apps(ctx) } == true
         else -> false

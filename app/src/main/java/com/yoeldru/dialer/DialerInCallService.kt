@@ -23,7 +23,12 @@ class DialerInCallService : InCallService() {
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
         // נכתב: 2026-11-02 20:30 — זוכרים מה היה פתוח (וויז וכו') כדי לחזור אליו
-        if (CallManager.calls.isEmpty()) AutoBackground.previousApp = AutoBackground.detectPreviousApp(this)
+        if (CallManager.calls.isEmpty()) {
+            // עודכן: 2026-11-03 14:45 — חיוג מתוך האפליקציה: לא מעבירים לרקע
+            AutoBackground.previousApp =
+                if (System.currentTimeMillis() - MainActivity.lastDialAt < 5000) packageName
+                else AutoBackground.detectPreviousApp(this)
+        }
         CallManager.onAdded(call)
         updateNotification()
         // נכתב: 2026-11-02 20:40 — הקראת שם המתקשר

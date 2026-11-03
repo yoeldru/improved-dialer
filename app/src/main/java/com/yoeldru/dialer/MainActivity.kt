@@ -30,6 +30,10 @@ class MainActivity : AppCompatActivity() {
         /** מספר שהגיע מאפליקציה אחרת (קישור tel:) וממתין להצגה בחייגן */
         @JvmStatic
         var pendingDial: String? = null
+
+        /** מתי חויג לאחרונה מהמסך הראשי (כדי לא "לחזור" לוויז אם החיוג היה מכאן) */
+        @Volatile
+        var lastDialAt = 0L
     }
 
     private lateinit var pager: ViewPager2
@@ -109,6 +113,21 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         DrivingModeService.onStateChanged = null
         super.onPause()
+    }
+
+    // ---------- נכתב: 2026-11-03 14:45 — סגירת המסך הראשי אחרי חיוג ----------
+
+    /** חויג מכאן: מנקים את החיפוש וסוגרים — מסך השיחה נשאר לבד, ובסוף השיחה הכל נסגר */
+    fun onDialed() {
+        lastDialAt = System.currentTimeMillis()
+        val f = supportFragmentManager.findFragmentByTag("f0") as? DialerFragment
+        f?.setTyped("")
+        pager.postDelayed({
+            if (!isFinishing) {
+                pager.currentItem = 0
+                finish()
+            }
+        }, 400)
     }
 
     /** מעבר למסך החייגן (למשל "ערוך לפני חיוג" מאנשי קשר) */

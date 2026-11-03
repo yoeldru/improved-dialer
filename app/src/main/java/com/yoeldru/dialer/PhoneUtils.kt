@@ -73,17 +73,22 @@ object PhoneUtils {
             return
         }
         val uri = Uri.fromParts("tel", number, null)
+        var ok = false
         try {
             val tm = ctx.getSystemService(TelecomManager::class.java)
                 ?: throw IllegalStateException("no telecom")
             tm.placeCall(uri, Bundle())
+            ok = true
         } catch (e: Exception) {
             try {
                 ctx.startActivity(Intent(Intent.ACTION_CALL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                ok = true
             } catch (e2: Exception) {
                 toast(ctx, "החיוג נכשל")
             }
         }
+        // עודכן: 2026-11-03 14:45 — אחרי חיוג מהמסך הראשי: סוגרים אותו, נשאר רק מסך השיחה
+        if (ok) (ctx as? MainActivity)?.onDialed()
     }
 
     private fun isInstalled(pm: PackageManager, pkg: String): Boolean = try {
