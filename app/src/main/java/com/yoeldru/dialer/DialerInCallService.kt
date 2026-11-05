@@ -33,6 +33,8 @@ class DialerInCallService : InCallService() {
         updateNotification()
         // נכתב: 2026-11-02 20:40 — הקראת שם המתקשר
         if (CallManager.isRinging(call)) CallerAnnouncer.onIncoming(this, CallManager.numberOf(call))
+        // נכתב: 2026-11-05 18:00 — שיחה נכנסת כשהמסך כבוי: מדליקים מסך ופותחים את מסך השיחה
+        if (CallManager.isRinging(call)) wakeForIncoming()
         // שיחה יוצאת: פותחים מיד את מסך השיחה. שיחה נכנסת: ההתראה פותחת מסך מלא.
         if (!CallManager.isRinging(call)) {
             try {
@@ -59,6 +61,33 @@ class DialerInCallService : InCallService() {
 
     fun updateNotification() {
         Notifications.update(this)
+    }
+
+    /** מדליק את המסך ופותח את מסך השיחה הנכנסת מעל מסך הנעילה */
+    @Suppress("DEPRECATION")
+    private fun wakeForIncoming() {
+        val pm = getSystemService(android.os.PowerManager::class.java) ?: return
+        val km = getSystemService(android.app.KeyguardManager::class.java)
+        val screenOff = !pm.isInteractive
+        val locked = km?.isKeyguardLocked == true
+        if (!screenOff && !locked) return // המסך דלוק ופתוח — מספיקה ההתראה הקופצת
+        try {
+            val wl = pm.newWakeLock(
+                android.os.PowerManager.FULL_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                    android.os.PowerManager.ON_AFTER_RELEASE,
+                "ImprovedDialer:incoming"
+            )
+            wl.acquire(10_000L)
+        } catch (e: Exception) {
+        }
+        try {
+            startActivity(
+                Intent(this, CallActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION)
+            )
+        } catch (e: Exception) {
+            // אם אנדרואיד חוסם — ההתראה במסך מלא (full screen intent) תפתח את המסך
+        }
     }
 
     fun toggleMute() {

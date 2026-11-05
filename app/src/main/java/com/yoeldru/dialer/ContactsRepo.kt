@@ -26,7 +26,36 @@ class PhoneEntry(
 
 class Favorite(val contactId: Long, val name: String, val photo: String?)
 
-class CallerInfo(val name: String?, val photo: String?)
+class CallerInfo(val name: String?, val photo: String?, val contactId: Long? = null)
+
+/** פרטים נוספים מאנשי הקשר — מוצגים במסך השיחה. נכתב: 2026-11-05 17:45 */
+class ContactDetails(
+    val title: String?,      // תפקיד
+    val company: String?,    // חברה / ארגון
+    val department: String?, // מחלקה
+    val nickname: String?,
+    val note: String?,
+    val birthday: String?,
+    val address: String?,
+    val email: String?,
+    val groups: List<String>
+) {
+    fun isEmpty() = listOf(title, company, department, nickname, note, birthday, address, email).all { it.isNullOrBlank() } && groups.isEmpty()
+
+    /** שורות להצגה */
+    fun lines(): List<String> {
+        val out = ArrayList<String>()
+        val job = listOf(title, department, company).filter { !it.isNullOrBlank() }.joinToString(" · ")
+        if (job.isNotBlank()) out.add("💼 $job")
+        if (!nickname.isNullOrBlank()) out.add("🏷 $nickname")
+        if (groups.isNotEmpty()) out.add("👥 " + groups.joinToString(", "))
+        if (!birthday.isNullOrBlank()) out.add("🎂 $birthday")
+        if (!address.isNullOrBlank()) out.add("🏠 $address")
+        if (!email.isNullOrBlank()) out.add("✉ $email")
+        if (!note.isNullOrBlank()) out.add("📝 $note")
+        return out
+    }
+}
 
 object ContactsRepo {
     @Volatile
@@ -183,15 +212,91 @@ object ContactsRepo {
                 val uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number))
                 ctx.contentResolver.query(
                     uri,
-                    arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME, ContactsContract.PhoneLookup.PHOTO_URI),
+                    arrayOf(
+                        ContactsContract.PhoneLookup.DISPLAY_NAME, ContactsContract.PhoneLookup.PHOTO_URI,
+                        ContactsContract.PhoneLookup._ID
+                    ),
                     null, null, null
                 )?.use { c ->
-                    if (c.moveToFirst()) info = CallerInfo(c.getString(0), c.getString(1))
+                    if (c.moveToFirst()) info = CallerInfo(c.getString(0), c.getString(1), c.getLong(2))
                 }
             } catch (e: Exception) {
             }
         }
         synchronized(callerCache) { callerCache[number] = info }
         return info
+    }
+
+    /** כל הפרטים הנוספים של איש קשר: תפקיד, חברה, הערות, יום הולדת, כתובת, מייל, קבוצות */
+    fun details(ctx: Context, contactId: Long): ContactDetails? {
+        if (!hasPermission(ctx)) return null
+        var title: String? = null
+        var company: String? = null
+        var dept: String? = null
+        var nick: String? = null
+        val notes = ArrayList<String>()
+        var birthday: String? = null
+        var address: String? = null
+        var email: String? = null
+        val groupIds = ArrayList<Long>()
+        val D = ContactsContract.Data.DATA1
+        try {
+            ctx.contentResolver.query(
+                ContactsContract.Data.CONTENT_URI,
+                arrayOf(ContactsContract.Data.MIMETYPE, D, ContactsContract.Data.DATA2, ContactsContract.Data.DATA4, ContactsContract.Data.DATA5),
+                ContactsContract.Data.CONTACT_ID + "=?", arrayOf(contactId.toString()), null
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val mime = c.getString(0) ?: continue
+                    val d1 = c.getString(1)?.trim()
+                    when (mime) {
+                        ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE -> {
+                            // DATA1 = חברה, DATA4 = תפקיד, DATA5 = מחלקה
+                            if (company.isNullOrBlank()) company = d1
+                            if (title.isNullOrBlank()) title = c.getString(3)?.trim()
+                            if (dept.isNullOrBlank()) dept = c.getString(4)?.trim()
+                        }
+                        ContactsContract.CommonDataKinds.Nickname.CONTENT_ITEM_TYPE -> if (nick.isNullOrBlank()) nick = d1
+                        ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE -> if (!d1.isNullOrBlank() && d1 !in notes) notes.add(d1)
+                        ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE -> {
+                            val type = c.getInt(2)
+                            if (type == ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY && birthday.isNullOrBlank()) birthday = formatDate(d1)
+                        }
+                        ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE -> if (address.isNullOrBlank()) address = d1?.replace('\n', ' ')
+                        ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE -> if (email.isNullOrBlank()) email = d1
+                        ContactsContract.CommonDataKinds.GroupMembership.CONTENT_ITEM_TYPE -> c.getString(1)?.toLongOrNull()?.let { groupIds.add(it) }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            return null
+        }
+        val groups = ArrayList<String>()
+        if (groupIds.isNotEmpty()) {
+            try {
+                ctx.contentResolver.query(
+                    ContactsContract.Groups.CONTENT_URI,
+                    arrayOf(ContactsContract.Groups._ID, ContactsContract.Groups.TITLE, ContactsContract.Groups.AUTO_ADD, ContactsContract.Groups.SYSTEM_ID),
+                    null, null, null
+                )?.use { c ->
+                    while (c.moveToNext()) {
+                        if (c.getLong(0) !in groupIds) continue
+                        // מדלגים על קבוצות מערכת ("My Contacts", "Starred")
+                        if (c.getInt(2) == 1 || !c.getString(3).isNullOrBlank()) continue
+                        c.getString(1)?.takeIf { it.isNotBlank() }?.let { if (it !in groups) groups.add(it) }
+                    }
+                }
+            } catch (e: Exception) {
+            }
+        }
+        return ContactDetails(title, company, dept, nick, notes.joinToString("\n").ifBlank { null }, birthday, address, email, groups)
+    }
+
+    /** "1980-05-14" -> "14.05.1980"; "--05-14" -> "14.05" */
+    private fun formatDate(s: String?): String? {
+        if (s.isNullOrBlank()) return null
+        val m = Regex("""(\d{4}|-)-?(\d{2})-(\d{2})""").find(s) ?: return s
+        val (y, mo, d) = m.destructured
+        return if (y == "-" || y.length != 4) "$d.$mo" else "$d.$mo.$y"
     }
 }

@@ -222,6 +222,7 @@ class CallActivity : AppCompatActivity() {
             nameView.text = "שיחת ועידה" + if (names.isNotEmpty()) " (${names.size})" else ""
             numberView.text = names.joinToString(" · ")
             Avatar.bind(photo, initial, "ועידה", null)
+            showContactDetails(null)
         } else if (number != shownNumber) {
             shownNumber = number
             dtmfTyped.setLength(0)
@@ -230,6 +231,7 @@ class CallActivity : AppCompatActivity() {
             nameView.text = display
             numberView.text = if (info.name != null) number else ""
             Avatar.bind(photo, initial, display, info.photo)
+            showContactDetails(info.contactId)
         }
 
         val ringing = state == Call.STATE_RINGING
@@ -320,6 +322,22 @@ class CallActivity : AppCompatActivity() {
     private fun releaseProximity() {
         val l = proximityLock ?: return
         if (l.isHeld) l.release()
+    }
+
+    // ---------- נכתב: 2026-11-05 17:55 — פרטים נוספים מאנשי הקשר ----------
+    private fun showContactDetails(contactId: Long?) {
+        val scroll = findViewById<View>(R.id.callInfoScroll)
+        val spacer = findViewById<View>(R.id.callSpacer)
+        val tv = findViewById<TextView>(R.id.callInfo)
+        val d = contactId?.let { ContactsRepo.details(this, it) }
+        if (d == null || d.isEmpty()) {
+            scroll.visibility = View.GONE
+            spacer.visibility = View.VISIBLE
+            return
+        }
+        tv.text = d.lines().joinToString("\n")
+        scroll.visibility = View.VISIBLE
+        spacer.visibility = View.GONE
     }
 
     // ---------- נכתב: 2026-11-01 23:00 — שמע, הקלטה ----------

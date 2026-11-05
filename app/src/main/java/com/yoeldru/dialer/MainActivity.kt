@@ -104,6 +104,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        checkFullScreenPermission()
         refreshUpdateBadge()
         checkForUpdate()
         DrivingModeService.onStateChanged = { runOnUiThread { refreshDriveButton() } }
@@ -113,6 +114,36 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         DrivingModeService.onStateChanged = null
         super.onPause()
+    }
+
+    // ---------- נכתב: 2026-11-05 18:00 — הרשאת "התראות במסך מלא" (אנדרואיד 14+) ----------
+    private var fullScreenAsked = false
+
+    private fun checkFullScreenPermission() {
+        if (fullScreenAsked || Build.VERSION.SDK_INT < 34) return
+        if (!PhoneUtils.isDefaultDialer(this)) return
+        val nm = getSystemService(android.app.NotificationManager::class.java) ?: return
+        if (nm.canUseFullScreenIntent()) return
+        fullScreenAsked = true
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("הדלקת מסך בשיחה נכנסת")
+            .setMessage("כדי שמסך השיחה הנכנסת יופיע כשהטלפון נעול או כבוי, צריך לאשר \"התראות במסך מלא\".\n\nבמסך שייפתח — הפעל את האפשרות עבור חייגן משופר.")
+            .setPositiveButton("לאישור") { _, _ -> openFullScreenSettings() }
+            .setNegativeButton("אחר כך", null)
+            .show()
+    }
+
+    fun openFullScreenSettings() {
+        try {
+            startActivity(
+                Intent("android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT", android.net.Uri.parse("package:$packageName"))
+            )
+        } catch (e: Exception) {
+            try {
+                startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", packageName, null)))
+            } catch (e2: Exception) {
+            }
+        }
     }
 
     // ---------- נכתב: 2026-11-03 14:45 — סגירת המסך הראשי אחרי חיוג ----------

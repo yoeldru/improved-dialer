@@ -68,7 +68,11 @@ object Notifications {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 .putExtra(CallActivity.EXTRA_ANSWER, true)
             val answerPi = PendingIntent.getActivity(ctx, 1, answerIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-            b.setContentText("שיחה נכנסת")
+            // עודכן: 2026-11-05 18:05 — תפקיד/חברה של המתקשר בהתראה
+            val job = info.contactId?.let { ContactsRepo.details(ctx, it) }?.let { d ->
+                listOf(d.title, d.company).filter { !it.isNullOrBlank() }.joinToString(" · ")
+            }
+            b.setContentText(if (job.isNullOrBlank()) "שיחה נכנסת" else "שיחה נכנסת · $job")
                 .setPriority(NotificationCompat.PRIORITY_MAX)
                 .setFullScreenIntent(openPi, true)
                 .addAction(0, "דחה", actionIntent(ctx, CallActionReceiver.ACTION_REJECT, 2))
