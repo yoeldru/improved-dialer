@@ -26,6 +26,13 @@ class CallActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_ANSWER = "answer"
+
+        // נכתב: 2026-11-05 19:15 — כשמסך השיחה מוצג, בלי ההתראה הקטנה שקופצת מעליו
+        @Volatile
+        var visible = false
+
+        @Volatile
+        var launchedAt = 0L
     }
 
     private lateinit var photo: ImageView
@@ -146,6 +153,10 @@ class CallActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.btnKeypad).setOnClickListener {
             dtmfKeypad.visibility = if (dtmfKeypad.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }
+        // רקע כהה שקוף לכל הכפתורים — קריא גם על תמונה
+        for (id in listOf(R.id.btnKeypad, R.id.btnAddCall, R.id.btnSwap)) {
+            findViewById<MaterialButton>(id).backgroundTintList = android.content.res.ColorStateList.valueOf(0x59000000)
+        }
         Keypad.build(dtmfKeypad, showLetters = false, textColor = 0xFFFFFFFF.toInt(), onKey = { k -> sendDtmf(k) }, onLongKey = { false }, dark = true)
 
         val pm = getSystemService(PowerManager::class.java)
@@ -165,12 +176,16 @@ class CallActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        visible = true
+        Notifications.update(this)
         CallManager.addListener(listener)
         handler.post(ticker)
         render()
     }
 
     override fun onStop() {
+        visible = false
+        Notifications.update(this)
         CallManager.removeListener(listener)
         handler.removeCallbacks(ticker)
         super.onStop()
@@ -222,6 +237,7 @@ class CallActivity : AppCompatActivity() {
             nameView.text = "שיחת ועידה" + if (names.isNotEmpty()) " (${names.size})" else ""
             numberView.text = names.joinToString(" · ")
             Avatar.bind(photo, initial, "ועידה", null)
+            applyBackgroundPhoto(null)
             showContactDetails(null)
         } else if (number != shownNumber) {
             shownNumber = number
@@ -231,6 +247,7 @@ class CallActivity : AppCompatActivity() {
             nameView.text = display
             numberView.text = if (info.name != null) number else ""
             Avatar.bind(photo, initial, display, info.photo)
+            applyBackgroundPhoto(info.photo)
             showContactDetails(info.contactId)
         }
 
@@ -324,6 +341,40 @@ class CallActivity : AppCompatActivity() {
         if (l.isHeld) l.release()
     }
 
+    // ---------- נכתב: 2026-11-05 19:10 — תמונת איש הקשר על כל המסך ----------
+    private var hasBgPhoto = false
+
+    private fun applyBackgroundPhoto(photoUri: String?) {
+        val bg = findViewById<ImageView>(R.id.bgPhoto)
+        val scrim = findViewById<View>(R.id.bgScrim)
+        val avatarBox = findViewById<View>(R.id.avatarBox)
+        var ok = false
+        if (!photoUri.isNullOrEmpty()) {
+            try {
+                bg.setImageURI(null)
+                bg.setImageURI(android.net.Uri.parse(photoUri))
+                ok = bg.drawable != null
+            } catch (e: Exception) {
+                ok = false
+            }
+        }
+        hasBgPhoto = ok
+        bg.visibility = if (ok) View.VISIBLE else View.GONE
+        scrim.visibility = if (ok) View.VISIBLE else View.GONE
+        // עם תמונה גדולה — בלי העיגול הקטן
+        avatarBox.visibility = if (ok) View.GONE else View.VISIBLE
+        window.statusBarColor = if (ok) 0xFF000000.toInt() else androidx.core.content.ContextCompat.getColor(this, R.color.call_bg)
+        // צל לטקסט כדי שיהיה קריא על כל תמונה
+        for (t in listOf(nameView, numberView, statusView, extraView)) {
+            if (ok) t.setShadowLayer(10f, 0f, 2f, 0xE6000000.toInt()) else t.setShadowLayer(0f, 0f, 0f, 0)
+        }
+        nameView.textSize = if (ok) 34f else 30f
+        (nameView.layoutParams as? android.widget.LinearLayout.LayoutParams)?.let {
+            it.topMargin = ((if (ok) 48 else 18) * resources.displayMetrics.density).toInt()
+            nameView.layoutParams = it
+        }
+    }
+
     // ---------- נכתב: 2026-11-05 17:55 — פרטים נוספים מאנשי הקשר ----------
     private fun showContactDetails(contactId: Long?) {
         val scroll = findViewById<View>(R.id.callInfoScroll)
@@ -336,6 +387,7 @@ class CallActivity : AppCompatActivity() {
             return
         }
         tv.text = d.lines().joinToString("\n")
+        tv.setBackgroundResource(if (hasBgPhoto) R.drawable.info_card_dark else R.drawable.info_card)
         scroll.visibility = View.VISIBLE
         spacer.visibility = View.GONE
     }
@@ -344,7 +396,8 @@ class CallActivity : AppCompatActivity() {
 
     /** כפתור "פעיל" מודגש */
     private fun setOn(b: MaterialButton, on: Boolean) {
-        b.backgroundTintList = android.content.res.ColorStateList.valueOf(if (on) 0x551FA463 else 0x00000000)
+        // רקע כהה שקוף — קריא גם על תמונת רקע
+        b.backgroundTintList = android.content.res.ColorStateList.valueOf(if (on) 0x991FA463.toInt() else 0x59000000)
         b.alpha = if (on) 1f else 0.85f
     }
 

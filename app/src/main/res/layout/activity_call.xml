@@ -1,7 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- נכתב: 2026-11-01 10:50 (שעון ישראל) — חייגן משופר: מסך שיחה (נכנסת / פעילה) -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- עודכן: 2026-11-05 19:05 — תמונת איש הקשר על כל המסך ברקע, עם הצללה לקריאות -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/bgPhoto"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="תמונת איש הקשר"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
+    <View
+        android:id="@+id/bgScrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/call_scrim"
+        android:visibility="gone" />
+
+<LinearLayout
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="true"
@@ -10,6 +30,7 @@
     android:padding="20dp">
 
     <FrameLayout
+        android:id="@+id/avatarBox"
         android:layout_width="128dp"
         android:layout_height="128dp"
         android:layout_marginTop="36dp">
@@ -371,3 +392,4 @@
             app:tint="@android:color/white" />
     </LinearLayout>
 </LinearLayout>
+</FrameLayout>

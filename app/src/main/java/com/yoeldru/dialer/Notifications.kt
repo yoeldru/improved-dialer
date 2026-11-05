@@ -55,7 +55,9 @@ object Notifications {
         val openPi = PendingIntent.getActivity(ctx, 0, openIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
         val ringing = state == Call.STATE_RINGING
-        val b = NotificationCompat.Builder(ctx, if (ringing) CH_INCOMING else CH_ONGOING)
+        // עודכן: 2026-11-05 19:15 — כשמסך השיחה המלא מוצג, ההתראה שקטה (בלי חלון קטן קופץ)
+        val quiet = ringing && (CallActivity.visible || System.currentTimeMillis() - CallActivity.launchedAt < 4000)
+        val b = NotificationCompat.Builder(ctx, if (ringing && !quiet) CH_INCOMING else CH_ONGOING)
             .setSmallIcon(R.drawable.ic_notif_call)
             .setContentTitle(title)
             .setContentIntent(openPi)
@@ -73,8 +75,9 @@ object Notifications {
                 listOf(d.title, d.company).filter { !it.isNullOrBlank() }.joinToString(" · ")
             }
             b.setContentText(if (job.isNullOrBlank()) "שיחה נכנסת" else "שיחה נכנסת · $job")
-                .setPriority(NotificationCompat.PRIORITY_MAX)
-                .setFullScreenIntent(openPi, true)
+                .setPriority(if (quiet) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_MAX)
+            if (!quiet) b.setFullScreenIntent(openPi, true)
+            b
                 .addAction(0, "דחה", actionIntent(ctx, CallActionReceiver.ACTION_REJECT, 2))
                 .addAction(0, "ענה", answerPi)
         } else {
