@@ -360,7 +360,7 @@ class CallActivity : AppCompatActivity() {
         }
         hasBgPhoto = ok
         bg.visibility = if (ok) View.VISIBLE else View.GONE
-        scrim.visibility = if (ok) View.VISIBLE else View.GONE
+        scrim.visibility = View.GONE // עודכן: 2026-11-05 19:20 — בלי הצללה
         // עם תמונה גדולה — בלי העיגול הקטן
         avatarBox.visibility = if (ok) View.GONE else View.VISIBLE
         window.statusBarColor = if (ok) 0xFF000000.toInt() else androidx.core.content.ContextCompat.getColor(this, R.color.call_bg)
@@ -376,20 +376,18 @@ class CallActivity : AppCompatActivity() {
     }
 
     // ---------- נכתב: 2026-11-05 17:55 — פרטים נוספים מאנשי הקשר ----------
+    /** עודכן: 2026-11-05 19:20 — רק ההערה מאנשי הקשר, כבאנר רץ מעל הכפתורים */
     private fun showContactDetails(contactId: Long?) {
-        val scroll = findViewById<View>(R.id.callInfoScroll)
-        val spacer = findViewById<View>(R.id.callSpacer)
         val tv = findViewById<TextView>(R.id.callInfo)
-        val d = contactId?.let { ContactsRepo.details(this, it) }
-        if (d == null || d.isEmpty()) {
-            scroll.visibility = View.GONE
-            spacer.visibility = View.VISIBLE
+        val note = contactId?.let { ContactsRepo.details(this, it) }?.note
+            ?.replace(Regex("\\s*\\n\\s*"), "  •  ")?.trim()
+        if (note.isNullOrBlank()) {
+            tv.visibility = View.GONE
             return
         }
-        tv.text = d.lines().joinToString("\n")
-        tv.setBackgroundResource(if (hasBgPhoto) R.drawable.info_card_dark else R.drawable.info_card)
-        scroll.visibility = View.VISIBLE
-        spacer.visibility = View.GONE
+        tv.text = "📝 $note"
+        tv.visibility = View.VISIBLE
+        tv.isSelected = true // מפעיל את הגלילה (marquee)
     }
 
     // ---------- נכתב: 2026-11-01 23:00 — שמע, הקלטה ----------
