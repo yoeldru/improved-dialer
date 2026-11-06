@@ -320,6 +320,7 @@ object Dialogs {
             m.add(0, 5, 4, if (ContactsRepo.isStarred(cid)) "☆ הסר מהמועדפים" else "⭐ הוסף למועדפים")
             m.add(0, 6, 5, "👤 פתח איש קשר")
             if (ContactsRepo.numbersOf(cid).size > 1) m.add(0, 9, 6, "📌 מספר ברירת מחדל")
+            m.add(0, 10, 7, "🔎 בדיקת כרטיס פרופיל")
         } else {
             m.add(0, 7, 4, "➕ הוסף לאנשי קשר")
         }
@@ -342,6 +343,20 @@ object Dialogs {
                 6 -> if (cid != null) PhoneUtils.openContact(ctx, cid)
                 7 -> PhoneUtils.addToContacts(ctx, row.number)
                 9 -> if (cid != null) chooseDefault(ctx, cid, row.title)
+                10 -> if (cid != null) {
+                    // נכתב: 2026-11-06 15:45 — דוח טכני לאיתור תמונת כרטיס הפרופיל
+                    val report = ProfileCard.debugReport(ctx, cid)
+                    MaterialAlertDialogBuilder(ctx)
+                        .setTitle("🔎 " + row.title)
+                        .setMessage(report)
+                        .setPositiveButton("סגור", null)
+                        .setNeutralButton("העתק") { _, _ ->
+                            val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)
+                            cm?.setPrimaryClip(android.content.ClipData.newPlainText("report", report))
+                            PhoneUtils.toast(ctx, "הועתק")
+                        }
+                        .show()
+                }
                 8 -> MaterialAlertDialogBuilder(ctx)
                     .setTitle("לחסום את " + row.number + "?")
                     .setPositiveButton("חסום") { _, _ -> PhoneUtils.blockNumber(ctx, row.number) }

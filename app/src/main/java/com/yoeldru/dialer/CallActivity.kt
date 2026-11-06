@@ -247,7 +247,7 @@ class CallActivity : AppCompatActivity() {
             nameView.text = display
             numberView.text = if (info.name != null) number else ""
             Avatar.bind(photo, initial, display, info.photo)
-            applyBackgroundPhoto(info.photo)
+            applyBackgroundPhoto(info.photo, info.contactId)
             showContactDetails(info.contactId)
         }
 
@@ -344,12 +344,28 @@ class CallActivity : AppCompatActivity() {
     // ---------- נכתב: 2026-11-05 19:10 — תמונת איש הקשר על כל המסך ----------
     private var hasBgPhoto = false
 
-    private fun applyBackgroundPhoto(photoUri: String?) {
+    private fun applyBackgroundPhoto(photoUri: String?, contactId: Long? = null) {
         val bg = findViewById<ImageView>(R.id.bgPhoto)
         val scrim = findViewById<View>(R.id.bgScrim)
         val avatarBox = findViewById<View>(R.id.avatarBox)
         var ok = false
-        if (!photoUri.isNullOrEmpty()) {
+        // עודכן: 2026-11-06 15:45 — קודם כרטיס הפרופיל (על כל המסך), אחרת התמונה הרגילה לכל הרוחב
+        val card = contactId?.let { ProfileCard.find(this, it, resources.displayMetrics.widthPixels) }
+        val lp = bg.layoutParams as android.widget.FrameLayout.LayoutParams
+        if (card != null) {
+            bg.setImageBitmap(card)
+            lp.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT
+            bg.scaleType = ImageView.ScaleType.CENTER_CROP
+            bg.adjustViewBounds = false
+            bg.layoutParams = lp
+            ok = true
+        } else {
+            lp.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            bg.scaleType = ImageView.ScaleType.FIT_CENTER
+            bg.adjustViewBounds = true
+            bg.layoutParams = lp
+        }
+        if (!ok && !photoUri.isNullOrEmpty()) {
             try {
                 bg.setImageURI(null)
                 bg.setImageURI(android.net.Uri.parse(photoUri))
