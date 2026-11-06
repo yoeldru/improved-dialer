@@ -6,12 +6,15 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
+    <!-- עודכן: 2026-11-06 11:05 — כל רוחב התמונה על המסך, גובה לפי הפרופורציות (בלי למרוח/לחתוך) -->
     <ImageView
         android:id="@+id/bgPhoto"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:adjustViewBounds="true"
         android:contentDescription="תמונת איש הקשר"
-        android:scaleType="centerCrop"
+        android:scaleType="fitCenter"
         android:visibility="gone" />
 
     <View
