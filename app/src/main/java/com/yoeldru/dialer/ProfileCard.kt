@@ -47,6 +47,11 @@ object ProfileCard {
                 while (c.moveToNext() && best == null) {
                     val mime = c.getString(0) ?: continue
                     if (mime in standardMimes) continue
+                    // עודכן: 2026-11-06 16:20 — סמסונג: data2/data3 = מזהי קבצי תמונה (display_photo), data1 = JSON עם חיתוך
+                    if (mime.endsWith("profile_card")) {
+                        best = fromSamsungCard(ctx, c, maxWidth)
+                        if (best != null) break
+                    }
                     for (i in 1..15) {
                         val bmp = tryColumn(ctx, c, i, maxWidth)
                         if (bmp != null && bmp.width >= 200 && bmp.height >= 200) {
@@ -60,6 +65,52 @@ object ProfileCard {
         }
         synchronized(cache) { cache[contactId] = best }
         return best
+    }
+
+    /** כרטיס פרופיל של סמסונג: התמונה שמורה כקובץ display_photo לפי מזהה ב-data3 / data2 */
+    private fun fromSamsungCard(ctx: Context, c: Cursor, maxWidth: Int): Bitmap? {
+        var crop: IntArray? = null
+        try {
+            val json = org.json.JSONObject(c.getString(1) ?: "")
+            val arr = json.optJSONArray("crop_rect")
+            if (arr != null && arr.length() == 4) crop = IntArray(4) { arr.getInt(it) }
+        } catch (e: Exception) {
+        }
+        val ids = listOf(3, 2).mapNotNull { i ->
+            try {
+                if (c.getType(i) == Cursor.FIELD_TYPE_INTEGER || c.getType(i) == Cursor.FIELD_TYPE_STRING) c.getString(i)?.toLongOrNull() else null
+            } catch (e: Exception) {
+                null
+            }
+        }
+        for (id in ids) {
+            val uri = android.content.ContentUris.withAppendedId(ContactsContract.DisplayPhoto.CONTENT_URI, id)
+            val full = try {
+                ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+            } catch (e: Exception) {
+                null
+            } ?: continue
+            var bmp: Bitmap = full
+            // אם התמונה גדולה מאזור החיתוך — חותכים כמו בכרטיס
+            val cr = crop
+            if (cr != null) {
+                val l = cr[0].coerceAtLeast(0)
+                val t = cr[1].coerceAtLeast(0)
+                val r = cr[2].coerceAtMost(full.width)
+                val b = cr[3].coerceAtMost(full.height)
+                val alreadyCropped = full.width <= (cr[2] - cr[0]) + 2 && full.height <= (cr[3] - cr[1]) + 2
+                if (!alreadyCropped && r - l > 100 && b - t > 100) {
+                    bmp = Bitmap.createBitmap(full, l, t, r - l, b - t)
+                }
+            }
+            // הקטנה לרוחב המסך
+            if (bmp.width > maxWidth * 1.5) {
+                val h = (bmp.height.toLong() * maxWidth / bmp.width).toInt()
+                bmp = Bitmap.createScaledBitmap(bmp, maxWidth, h, true)
+            }
+            if (bmp.width >= 200 && bmp.height >= 200) return bmp
+        }
+        return null
     }
 
     private fun tryColumn(ctx: Context, c: Cursor, i: Int, maxWidth: Int): Bitmap? {
