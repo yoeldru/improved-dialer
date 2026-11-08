@@ -165,6 +165,26 @@ class RecordingService : Service() {
         uri = null
     }
 
+    /** התראה "ההקלטה נשמרה" — הקשה פותחת את רשימת ההקלטות */
+    private fun notifySaved() {
+        try {
+            val nm = getSystemService(NotificationManager::class.java) ?: return
+            val pi = android.app.PendingIntent.getActivity(
+                this, 41, Intent(this, RecordingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val n = NotificationCompat.Builder(this, CHANNEL)
+                .setSmallIcon(R.drawable.ic_notif_call)
+                .setContentTitle("📼 הקלטת השיחה נשמרה")
+                .setContentText("הקש כדי לשמוע, לשתף או למחוק")
+                .setContentIntent(pi)
+                .setAutoCancel(true)
+                .build()
+            nm.notify(NOTIF_ID + 1, n)
+        } catch (e: Exception) {
+        }
+    }
+
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         val r = recorder
@@ -185,6 +205,7 @@ class RecordingService : Service() {
                 val v = ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }
                 contentResolver.update(it, v, null, null)
                 PhoneUtils.toast(this, "ההקלטה נשמרה")
+                notifySaved() // נכתב: 2026-11-08 11:50 — התראה עם קישור להשמעה
             } catch (e: Exception) {
             }
         }

@@ -79,14 +79,30 @@ class NameVoiceActivity : AppCompatActivity() {
         col.addView(hint("כתוב את השם כמו שהוא נשמע. ניקוד עוזר מאוד לקול העברי, למשל: אַיָּלָה. אפשר גם \"אשתי\" או כל כינוי."))
         pronEdit = EditText(this).apply {
             setText(NameVoiceStore.pronunciation(this@NameVoiceActivity, contactId) ?: CallerAnnouncer.spokenName(name))
+            textSize = 24f
         }
         col.addView(pronEdit)
+        // עודכן: 2026-11-08 11:40 — מקלדת ניקוד + שמירה אוטומטית
+        col.addView(NikudBar.create(this, pronEdit))
+        val pronSaved = hint("")
+        col.addView(pronSaved)
+        val saveRunnable = Runnable {
+            val t = pronEdit.text.toString()
+            val same = t.trim() == CallerAnnouncer.spokenName(name)
+            NameVoiceStore.setPronunciation(this, contactId, if (same) null else t)
+            pronSaved.text = "✔ נשמר אוטומטית"
+        }
+        pronEdit.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                pronSaved.text = "שומר..."
+                handler.removeCallbacks(saveRunnable)
+                handler.postDelayed(saveRunnable, 700)
+            }
+        })
         col.addView(row(
             button("🔊 השמע") { CallerAnnouncer.say(this, "שיחה נכנסת. " + pronEdit.text.toString()) },
-            button("💾 שמור") {
-                NameVoiceStore.setPronunciation(this, contactId, pronEdit.text.toString())
-                PhoneUtils.toast(this, "נשמר")
-            },
             button("איפוס") {
                 NameVoiceStore.setPronunciation(this, contactId, null)
                 pronEdit.setText(CallerAnnouncer.spokenName(name))
@@ -95,7 +111,7 @@ class NameVoiceActivity : AppCompatActivity() {
 
         // ---- 2. הקלטה בקולך ----
         col.addView(title("הקלטה בקולך", 18f, top = true))
-        col.addView(hint("ההקלטה תושמע בשיחה נכנסת במקום ההקראה הממוחשבת. למשל: \"אילה מתקשרת\". עד 5 שניות."))
+        col.addView(hint("ההקלטה תושמע בשיחה נכנסת במקום ההקראה הממוחשבת. למשל: \"אילה מתקשרת\". עד 5 שניות. ההקלטה נשמרת אוטומטית."))
         recStatus = hint("")
         col.addView(recStatus)
         recBtn = button("⏺ הקלט") { toggleRecording() }
@@ -103,7 +119,7 @@ class NameVoiceActivity : AppCompatActivity() {
             recBtn,
             button("▶ השמע") {
                 val f = NameVoiceStore.recordingFile(this, contactId)
-                if (!NameVoiceStore.hasRecording(this, contactId) || !CallerAnnouncer.playFile(f)) PhoneUtils.toast(this, "אין הקלטה")
+                if (!NameVoiceStore.hasRecording(this, contactId) || !CallerAnnouncer.playFile(f, forTest = true)) PhoneUtils.toast(this, "אין הקלטה")
             },
             button("🗑 מחק") {
                 NameVoiceStore.recordingFile(this, contactId).delete()
@@ -140,7 +156,7 @@ class NameVoiceActivity : AppCompatActivity() {
     }
 
     private fun refreshRecStatus() {
-        recStatus.text = if (NameVoiceStore.hasRecording(this, contactId)) "✔ יש הקלטה" else "אין הקלטה — תושמע הקראה ממוחשבת"
+        recStatus.text = if (NameVoiceStore.hasRecording(this, contactId)) "✔ יש הקלטה שמורה — לחץ ▶ כדי לשמוע" else "אין הקלטה — תושמע הקראה ממוחשבת"
     }
 
     private fun refreshLearned() {
@@ -194,6 +210,10 @@ class NameVoiceActivity : AppCompatActivity() {
         recorder = null
         recBtn.text = "⏺ הקלט"
         refreshRecStatus()
+        // משמיעים מיד את מה שהוקלט
+        if (NameVoiceStore.hasRecording(this, contactId)) {
+            handler.postDelayed({ CallerAnnouncer.playFile(NameVoiceStore.recordingFile(this, contactId), forTest = true) }, 300)
+        }
     }
 
     // ---- עזרי תצוגה ----

@@ -150,13 +150,14 @@ object CallerAnnouncer {
         if (remaining > 0) handler.postDelayed({ speakNext() }, 5000)
     }
 
-    fun playFile(f: File): Boolean {
+    /** forTest = השמעה מהמסך (בעוצמת מדיה, כדי שבטוח יישמע). עודכן: 2026-11-08 11:40 */
+    fun playFile(f: File, forTest: Boolean = false): Boolean {
         return try {
             releasePlayer()
             val p = MediaPlayer()
             p.setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                    .setUsage(if (forTest) AudioAttributes.USAGE_MEDIA else AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
             )
