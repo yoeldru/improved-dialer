@@ -107,6 +107,11 @@
         </service>
 
         <activity
+            android:name=".NameVoiceActivity"
+            android:exported="false"
+            android:label="הגייה וזיהוי קולי" />
+
+        <activity
             android:name=".RecordingsActivity"
             android:exported="false"
             android:label="הקלטות שיחה" />

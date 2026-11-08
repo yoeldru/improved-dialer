@@ -161,10 +161,11 @@ class DialerFragment : Fragment(R.layout.fragment_dialer) {
                 val title = (rc.name ?: rc.number.ifEmpty { "מספר חסוי" }) + count
                 // נכתב: 2026-11-02 22:40 — משך השיחה בשורה (רק לשיחות שנענו)
                 val dur = formatDuration(rc.durationSec)
+                // עודכן: 2026-11-08 10:50 — המשך מיד אחרי סוג השיחה, כדי שלא ייחתך בסוף השורה
                 val parts = mutableListOf(arrow)
-                if (rc.name != null) parts.add(rc.number)
-                parts.add(time.toString())
                 if (dur != null) parts.add("⏱ $dur")
+                parts.add(time.toString())
+                if (rc.name != null) parts.add(rc.number)
                 val sub = parts.joinToString(" · ")
                 Row(title, sub, rc.number, rc.photo, rc.contactId, rc.type == CallLog.Calls.MISSED_TYPE)
             }

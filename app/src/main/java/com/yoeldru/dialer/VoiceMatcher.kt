@@ -146,7 +146,38 @@ object VoiceMatcher {
      * מחזיר את מספרי הטלפון של אנשי הקשר המתאימים ביותר.
      * spoken = כל החלופות שזיהוי הדיבור החזיר.
      */
+    /** מה שנשמר ב"לימוד זיהוי קולי" לכל איש קשר. נכתב: 2026-11-08 10:55 */
+    @Volatile
+    var aliases: Map<Long, List<String>> = emptyMap()
+
     fun match(spoken: List<String>, phones: List<PhoneEntry>): List<PhoneEntry> {
+        // קודם: התאמה למה שלמדנו מהקול שלך
+        if (aliases.isNotEmpty()) {
+            val hits = LinkedHashMap<Long, Int>()
+            for (alt in spoken) {
+                val q = queryTokens(alt).joinToString(" ")
+                val qs = skeleton(q.replace(" ", ""))
+                if (q.isEmpty()) continue
+                for ((id, list) in aliases) {
+                    for (a in list) {
+                        val aq = queryTokens(a).joinToString(" ").ifEmpty { a }
+                        val score = when {
+                            aq == q -> 3
+                            skeleton(aq.replace(" ", "")) == qs && qs.length >= 2 -> 2
+                            q.length >= 3 && (aq.contains(q) || q.contains(aq)) -> 1
+                            else -> 0
+                        }
+                        if (score > (hits[id] ?: 0)) hits[id] = score
+                    }
+                }
+            }
+            if (hits.isNotEmpty()) {
+                val top = hits.values.maxOrNull() ?: 0
+                val ids = hits.filter { it.value == top }.keys
+                val found = phones.filter { it.contactId in ids }
+                if (found.isNotEmpty()) return found
+            }
+        }
         val nameTokensById = HashMap<Long, List<String>>()
         for (p in phones) nameTokensById.getOrPut(p.contactId) { tokens(p.name) }
 

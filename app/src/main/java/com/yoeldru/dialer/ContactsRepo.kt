@@ -106,7 +106,12 @@ object ContactsRepo {
         }
         phones = list
         synchronized(callerCache) { callerCache.clear() }
+        VoiceMatcher.aliases = NameVoiceStore.allAliases(ctx)
         return list
+    }
+
+    fun clearLookupCache() {
+        synchronized(callerCache) { callerCache.clear() }
     }
 
     fun numbersOf(contactId: Long): List<PhoneEntry> = phones.filter { it.contactId == contactId }
@@ -223,6 +228,8 @@ object ContactsRepo {
             } catch (e: Exception) {
             }
         }
+        // נכתב: 2026-11-08 10:50 — מספר לא שמור שנתת לו שם באפליקציה
+        if (info.name == null) NameVoiceStore.label(ctx, number)?.let { info = CallerInfo("🏷 $it", null, null) }
         synchronized(callerCache) { callerCache[number] = info }
         return info
     }

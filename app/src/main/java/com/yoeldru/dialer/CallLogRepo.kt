@@ -51,6 +51,7 @@ object CallLogRepo {
                     }
                     val entry = byLocal[PhoneUtils.localDigits(number)]
                     val name = c.getString(1)?.takeIf { it.isNotBlank() } ?: entry?.name
+                        ?: NameVoiceStore.label(ctx, number)?.let { "🏷 $it" } // נכתב: 2026-11-08 10:50
                     val photo = c.getString(4) ?: entry?.photo
                     out.add(RecentCall(number, name, type, date, photo, entry?.contactId, 1, c.getLong(5)))
                 }

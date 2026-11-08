@@ -72,6 +72,9 @@ class SettingsActivity : AppCompatActivity() {
             repLabel.text = "להקריא ${v.toInt()} פעמים"
         }
         findViewById<MaterialButton>(R.id.btnTestAnnounce).setOnClickListener { CallerAnnouncer.test(this) }
+        // נכתב: 2026-11-08 11:20 — בחירת קול עברי
+        CallerAnnouncer.ensureTts(applicationContext) { refreshVoiceStatus() }
+        findViewById<MaterialButton>(R.id.btnChooseVoice).setOnClickListener { chooseVoice() }
 
         // נכתב: 2026-11-02 20:40 — מעבר לרקע בזמן ניווט
         val modeGroup = findViewById<android.widget.RadioGroup>(R.id.autoBgMode)
@@ -194,6 +197,54 @@ class SettingsActivity : AppCompatActivity() {
             )
             .setPositiveButton("סגור", null)
             .show()
+    }
+
+    private fun refreshVoiceStatus() {
+        val tv = findViewById<TextView>(R.id.voiceStatus)
+        val voices = CallerAnnouncer.hebrewVoices()
+        val engine = CallerAnnouncer.engineName()
+        tv.text = if (!CallerAnnouncer.hebrewAvailable || voices.isEmpty())
+            "⚠ אין קול עברי מותקן (מנוע: $engine). זו כנראה הסיבה להקראה המעוותת — לחץ \"בחירת קול עברי\" להתקנה."
+        else
+            "✔ ${voices.size} קולות עבריים זמינים · נבחר: " + (CallerAnnouncer.voiceName(this) ?: "אוטומטי (האיכותי ביותר)")
+    }
+
+    private fun chooseVoice() {
+        CallerAnnouncer.ensureTts(applicationContext) {
+            val voices = CallerAnnouncer.hebrewVoices()
+            if (voices.isEmpty()) {
+                com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                    .setTitle("אין קול עברי")
+                    .setMessage("צריך את \"שירותי דיבור של Google\" (Speech Services by Google) עם עברית.\n\n1. התקן/עדכן מחנות Play: Speech Services by Google\n2. הגדרות הטלפון ← ניהול כללי ← המרת טקסט לדיבור ← מנוע מועדף: Google\n3. שם: הורד את השפה עברית")
+                    .setPositiveButton("פתח חנות Play") { _, _ ->
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.tts")))
+                        } catch (e: Exception) {
+                        }
+                    }
+                    .setNeutralButton("הורדת קולות") { _, _ ->
+                        try {
+                            startActivity(CallerAnnouncer.installVoicesIntent())
+                        } catch (e: Exception) {
+                        }
+                    }
+                    .setNegativeButton("סגור", null)
+                    .show()
+                return@ensureTts
+            }
+            val labels = listOf("אוטומטי (האיכותי ביותר)") + voices.mapIndexed { i, v ->
+                val net = if (v.isNetworkConnectionRequired) " · דרך אינטרנט" else ""
+                "קול ${i + 1} · איכות ${v.quality}$net"
+            }
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("בחר קול (לחיצה משמיעה דוגמה)")
+                .setItems(labels.toTypedArray()) { _, which ->
+                    CallerAnnouncer.setVoiceName(this, if (which == 0) null else voices[which - 1].name)
+                    CallerAnnouncer.test(this)
+                    refreshVoiceStatus()
+                }
+                .show()
+        }
     }
 
     private fun refreshAutoBg() {

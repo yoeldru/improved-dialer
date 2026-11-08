@@ -307,6 +307,32 @@ object Dialogs {
         pickNumber(ctx, contactId, name, rememberChecked = true, title = "📌 מספר ברירת מחדל — $name") { }
     }
 
+    /** שם מקומי למספר לא שמור — מוצג בהיסטוריה, במסך השיחה ובהקראה. נכתב: 2026-11-08 11:15 */
+    fun labelDialog(ctx: Context, number: String, onChanged: () -> Unit) {
+        val edit = android.widget.EditText(ctx).apply {
+            hint = "למשל: אינסטלטור, מוסך, שליח"
+            setText(NameVoiceStore.label(ctx, number) ?: "")
+        }
+        val box = LinearLayout(ctx).apply {
+            val p = (20 * ctx.resources.displayMetrics.density).toInt()
+            setPadding(p, p / 2, p, 0)
+            addView(edit)
+        }
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("🏷 שם ל-$number")
+            .setView(box)
+            .setPositiveButton("שמור") { _, _ ->
+                NameVoiceStore.setLabel(ctx, number, edit.text.toString())
+                onChanged()
+            }
+            .setNeutralButton("הסר") { _, _ ->
+                NameVoiceStore.setLabel(ctx, number, null)
+                onChanged()
+            }
+            .setNegativeButton("ביטול", null)
+            .show()
+    }
+
     /** תפריט לחיצה ארוכה על שורה */
     fun rowMenu(ctx: Context, anchor: View, row: Row, onChanged: () -> Unit, onEdit: (String) -> Unit) {
         val menu = PopupMenu(ctx, anchor)
@@ -320,9 +346,13 @@ object Dialogs {
             m.add(0, 5, 4, if (ContactsRepo.isStarred(cid)) "☆ הסר מהמועדפים" else "⭐ הוסף למועדפים")
             m.add(0, 6, 5, "👤 פתח איש קשר")
             if (ContactsRepo.numbersOf(cid).size > 1) m.add(0, 9, 6, "📌 מספר ברירת מחדל")
-            m.add(0, 10, 7, "🔎 בדיקת כרטיס פרופיל")
+            m.add(0, 11, 7, "🗣 הגייה, הקלטה וזיהוי קולי")
+            m.add(0, 10, 8, "🔎 בדיקת כרטיס פרופיל")
         } else {
             m.add(0, 7, 4, "➕ הוסף לאנשי קשר")
+            // נכתב: 2026-11-08 11:15 — מספר לא שמור: שם מקומי וחיפוש
+            m.add(0, 12, 5, "🏷 תן שם למספר")
+            m.add(0, 13, 6, "🔎 חפש את המספר בגוגל")
         }
         m.add(0, 8, 6, "🚫 חסום מספר")
         menu.setOnMenuItemClickListener { item ->
@@ -343,6 +373,17 @@ object Dialogs {
                 6 -> if (cid != null) PhoneUtils.openContact(ctx, cid)
                 7 -> PhoneUtils.addToContacts(ctx, row.number)
                 9 -> if (cid != null) chooseDefault(ctx, cid, row.title)
+                11 -> if (cid != null) NameVoiceActivity.open(ctx, cid, row.title)
+                12 -> labelDialog(ctx, row.number, onChanged)
+                13 -> try {
+                    val q = android.net.Uri.encode("\"" + row.number + "\" OR \"" + PhoneUtils.toInternational(row.number) + "\"")
+                    ctx.startActivity(
+                        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com/search?q=$q"))
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                } catch (e: Exception) {
+                    PhoneUtils.toast(ctx, "לא נמצא דפדפן")
+                }
                 10 -> if (cid != null) {
                     // נכתב: 2026-11-06 15:45 — דוח טכני לאיתור תמונת כרטיס הפרופיל
                     val report = ProfileCard.debugReport(ctx, cid)

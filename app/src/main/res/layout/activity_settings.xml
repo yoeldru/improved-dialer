@@ -123,6 +123,22 @@
             android:valueFrom="1"
             android:valueTo="5" />
 
+        <!-- נכתב: 2026-11-08 11:20 — בחירת קול עברי -->
+        <TextView
+            android:id="@+id/voiceStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:alpha="0.75"
+            android:textSize="13sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnChooseVoice"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🎙 בחירת קול עברי" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnTestAnnounce"
             style="@style/Widget.Material3.Button.OutlinedButton"
