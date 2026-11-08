@@ -91,41 +91,91 @@ class RecordingService : Service() {
     private fun safeName(s: String): String =
         s.replace(Regex("[\\\\/:*?\"<>|]"), "").trim().ifEmpty { "שיחה" }.take(40)
 
+    // ---------- עודכן: 2026-11-08 12:05 — ניסיון כמה מקורות שמע, ומעבר אוטומטי אם ההקלטה שקטה ----------
+    private var recName = "שיחה"
+    private var sourceIndex = 0
+
+    /** סדר הניסיון: קו השיחה (שני הצדדים) ← זיהוי דיבור ← תקשורת ← מיקרופון */
+    private val sources = intArrayOf(
+        MediaRecorder.AudioSource.VOICE_CALL,
+        MediaRecorder.AudioSource.VOICE_RECOGNITION,
+        MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+        MediaRecorder.AudioSource.MIC
+    )
+
+    /** איזה מקור עבד בפעם הקודמת — מתחילים ממנו */
+    private fun savedSource(): Int = getSharedPreferences("settings", MODE_PRIVATE).getInt("rec_source_idx", 0)
+    private fun saveSource(i: Int) = getSharedPreferences("settings", MODE_PRIVATE).edit().putInt("rec_source_idx", i).apply()
+
     private fun begin(name: String): Boolean {
+        recName = name
+        sourceIndex = savedSource().coerceIn(0, sources.size - 1)
+        return startWithSource()
+    }
+
+    private fun newOutput(): Boolean {
         val stamp = SimpleDateFormat("yyyy-MM-dd_HH-mm", Locale.US).format(Date())
         val values = ContentValues().apply {
-            put(MediaStore.Audio.Media.DISPLAY_NAME, safeName(name) + "_" + stamp + ".m4a")
+            put(MediaStore.Audio.Media.DISPLAY_NAME, safeName(recName) + "_" + stamp + ".m4a")
             put(MediaStore.Audio.Media.MIME_TYPE, "audio/mp4")
             put(MediaStore.Audio.Media.RELATIVE_PATH, FOLDER)
             put(MediaStore.Audio.Media.IS_PENDING, 1)
         }
-        return try {
-            val u = contentResolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values) ?: return false
-            uri = u
-            val fd = contentResolver.openFileDescriptor(u, "w") ?: return false
-            pfd = fd
-            val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(this) else @Suppress("DEPRECATION") MediaRecorder()
-            // מיקרופון: אנדרואיד לא מאפשר לאפליקציות רגילות להקליט את קו השיחה עצמו
-            r.setAudioSource(MediaRecorder.AudioSource.MIC)
-            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            r.setAudioSamplingRate(44100)
-            r.setAudioEncodingBitRate(96000)
-            r.setOutputFile(fd.fileDescriptor)
-            r.prepare()
-            r.start()
-            recorder = r
-            recording = true
-            startedAt = System.currentTimeMillis()
-            CallManager.notifyChanged()
-            // בדיקה אם מתקבל קול בכלל (בחלק מהמכשירים ההקלטה בזמן שיחה מושתקת)
-            maxAmp = 0
-            handler.postDelayed(ampCheck, 1000)
-            true
+        val u = contentResolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values) ?: return false
+        uri = u
+        pfd = contentResolver.openFileDescriptor(u, "w") ?: return false
+        return true
+    }
+
+    /** מנסה מקורות לפי הסדר עד שאחד מתחיל להקליט */
+    private fun startWithSource(): Boolean {
+        var lastError: String? = null
+        while (sourceIndex < sources.size) {
+            try {
+                if (!newOutput()) return false
+                val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(this) else @Suppress("DEPRECATION") MediaRecorder()
+                r.setAudioSource(sources[sourceIndex])
+                r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                r.setAudioSamplingRate(44100)
+                r.setAudioEncodingBitRate(96000)
+                r.setOutputFile(pfd!!.fileDescriptor)
+                r.prepare()
+                r.start()
+                recorder = r
+                recording = true
+                startedAt = System.currentTimeMillis()
+                CallManager.notifyChanged()
+                // בדיקה שבאמת מגיע קול (בחלק מהמכשירים המקור "מצליח" אבל מקליט שקט)
+                maxAmp = 0
+                ampChecks = 0
+                handler.removeCallbacks(ampCheck)
+                handler.postDelayed(ampCheck, 500)
+                return true
+            } catch (e: Exception) {
+                lastError = e.message
+                cleanupFailed()
+                sourceIndex++
+            }
+        }
+        PhoneUtils.toast(this, "ההקלטה נכשלה" + (lastError?.let { ": $it" } ?: ""))
+        return false
+    }
+
+    /** המקור הנוכחי מקליט שקט — עוברים לבא בתור */
+    private fun switchSource() {
+        handler.removeCallbacks(ampCheck)
+        try {
+            recorder?.stop()
         } catch (e: Exception) {
-            PhoneUtils.toast(this, "ההקלטה נכשלה: " + (e.message ?: ""))
-            cleanupFailed()
-            false
+        }
+        cleanupFailed()
+        sourceIndex++
+        if (sourceIndex >= sources.size || !startWithSource()) {
+            recording = false
+            CallManager.notifyChanged()
+            onSilenceDetected?.invoke()
+            stopSelf()
         }
     }
 
@@ -138,10 +188,15 @@ class RecordingService : Service() {
             } catch (e: Exception) {
             }
             ampChecks++
-            if (ampChecks < 8) {
-                handler.postDelayed(this, 1000)
-            } else if (maxAmp == 0) {
-                onSilenceDetected?.invoke()
+            if (maxAmp > 0) {
+                // יש קול — זוכרים את המקור שעבד לפעם הבאה
+                saveSource(sourceIndex)
+                return
+            }
+            if (ampChecks < 6) {
+                handler.postDelayed(this, 500)
+            } else {
+                switchSource() // 3 שניות של שקט מוחלט — המקור חסום
             }
         }
     }

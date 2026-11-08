@@ -4,4 +4,6 @@
     <string name="sc_drive">מצב נהיגה</string>
     <string name="sc_drive_long">מצב נהיגה — חיוג קולי בלי ידיים</string>
     <string name="sc_voice">חיוג קולי</string>
+    <string name="record_helper_label">חייגן משופר – עזר הקלטת שיחות</string>
+    <string name="record_helper_desc">מאפשר לחייגן משופר להקליט שיחות (כמו אפליקציות הקלטה אחרות). השירות לא קורא את תוכן המסך ולא אוסף מידע.</string>
 </resources>

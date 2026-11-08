@@ -470,6 +470,27 @@ class CallActivity : AppCompatActivity() {
         androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
     ) { granted -> if (granted) toggleRecording() else PhoneUtils.toast(this, "הקלטה צריכה הרשאת מיקרופון") }
 
+    private var helperAsked = false
+
+    /** הסבר והפעלה של "עזר הקלטה" (שירות נגישות) — כך אפליקציות הקלטה אחרות מקליטות שיחות */
+    private fun showRecordHelperDialog(firstTime: Boolean) {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(if (firstTime) "הפעלת הקלטת שיחות" else "ההקלטה נחסמה")
+            .setMessage(
+                "אנדרואיד חוסם הקלטה בזמן שיחה, חוץ מאפליקציות עם שירות נגישות פעיל — כך עובדות אפליקציות ההקלטה האחרות.\n\n" +
+                    "במסך שייפתח: אפליקציות מותקנות ← \"חייגן משופר – עזר הקלטת שיחות\" ← הפעל.\n" +
+                    "(אם האפשרות אפורה — קודם \"התר הגדרות מוגבלות\" בפרטי האפליקציה.)\n\nהשירות לא קורא את המסך ולא אוסף מידע."
+            )
+            .setPositiveButton("להפעלה") { _, _ ->
+                try {
+                    startActivity(RecordHelperService.settingsIntent())
+                } catch (e: Exception) {
+                }
+            }
+            .setNegativeButton(if (firstTime) "הקלט בכל זאת" else "סגור") { _, _ -> if (firstTime) toggleRecording() }
+            .show()
+    }
+
     private fun toggleRecording() {
         if (RecordingService.recording) {
             RecordingService.stop(this)
@@ -481,13 +502,23 @@ class CallActivity : AppCompatActivity() {
             micPermLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
             return
         }
+        // עודכן: 2026-11-08 12:10 — בלי "עזר הקלטה" בנגישות אנדרואיד חוסם הקלטה בזמן שיחה
+        if (!RecordHelperService.isEnabled(this) && !helperAsked) {
+            helperAsked = true
+            showRecordHelperDialog(firstTime = true)
+            return
+        }
         RecordingService.onSilenceDetected = {
             runOnUiThread {
-                MaterialAlertDialogBuilder(this)
-                    .setTitle("ההקלטה שקטה")
-                    .setMessage("נראה שהטלפון חוסם הקלטה בזמן שיחה (מגבלה של אנדרואיד/היצרן). אפשר לנסות להפעיל רמקול — לפעמים זה עוזר.")
-                    .setPositiveButton("הבנתי", null)
-                    .show()
+                if (!RecordHelperService.isEnabled(this)) {
+                    showRecordHelperDialog(firstTime = false)
+                } else {
+                    MaterialAlertDialogBuilder(this)
+                        .setTitle("ההקלטה שקטה")
+                        .setMessage("ניסיתי את כל מקורות השמע והטלפון מחזיר שקט. נסה להפעיל רמקול ולהקליט שוב.")
+                        .setPositiveButton("הבנתי", null)
+                        .show()
+                }
             }
         }
         RecordingService.start(this, nameView.text.toString())
