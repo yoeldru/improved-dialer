@@ -349,7 +349,8 @@ object Dialogs {
             m.add(0, 11, 7, "🗣 הגייה, הקלטה וזיהוי קולי")
             m.add(0, 10, 8, "🔎 בדיקת כרטיס פרופיל")
         } else {
-            m.add(0, 7, 4, "➕ הוסף לאנשי קשר")
+            m.add(0, 14, 4, "👤➕ צור איש קשר חדש") // עודכן: 2026-11-23 20:25
+            m.add(0, 7, 4, "➕ הוסף לאיש קשר קיים")
             // נכתב: 2026-11-08 11:15 — מספר לא שמור: שם מקומי וחיפוש
             m.add(0, 12, 5, "🏷 תן שם למספר")
             m.add(0, 13, 6, "🔎 חפש את המספר בגוגל")
@@ -372,6 +373,7 @@ object Dialogs {
                 }
                 6 -> if (cid != null) PhoneUtils.openContact(ctx, cid)
                 7 -> PhoneUtils.addToContacts(ctx, row.number)
+                14 -> PhoneUtils.newContact(ctx, row.number, NameVoiceStore.label(ctx, row.number))
                 9 -> if (cid != null) chooseDefault(ctx, cid, row.title)
                 11 -> if (cid != null) NameVoiceActivity.open(ctx, cid, row.title)
                 12 -> labelDialog(ctx, row.number, onChanged)

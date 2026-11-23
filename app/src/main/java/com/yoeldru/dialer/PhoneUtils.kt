@@ -144,6 +144,23 @@ object PhoneUtils {
         toast(ctx, "המספר הועתק")
     }
 
+    /** עודכן: 2026-11-23 20:25 — יצירת איש קשר חדש עם המספר */
+    fun newContact(ctx: Context, number: String, name: String? = null) {
+        val intent = Intent(Intent.ACTION_INSERT, ContactsContract.Contacts.CONTENT_URI).apply {
+            putExtra(ContactsContract.Intents.Insert.PHONE, number)
+            putExtra(ContactsContract.Intents.Insert.PHONE_TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
+            if (!name.isNullOrBlank()) putExtra(ContactsContract.Intents.Insert.NAME, name)
+            putExtra("finishActivityOnSaveCompleted", true)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            ctx.startActivity(intent)
+        } catch (e: Exception) {
+            toast(ctx, "לא נמצאה אפליקציית אנשי קשר")
+        }
+    }
+
+    /** הוספת המספר לאיש קשר קיים */
     fun addToContacts(ctx: Context, number: String) {
         val intent = Intent(Intent.ACTION_INSERT_OR_EDIT).apply {
             type = ContactsContract.Contacts.CONTENT_ITEM_TYPE
